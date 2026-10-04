@@ -46,6 +46,8 @@ moved so far).
 | `completed` | the offer is fully bought or sold | |
 | `cancelled` | the offer is aborted | |
 | `cleared` | the offer leaves its slot (collected) | `unobserved: true` if it left without the plugin seeing it finish, so later fills may be missing |
+| `collected` | items or coins are taken out of the slot's collection box while the offer is still there (e.g. collecting part of a filling bid) | `qty` (the offer's own item: units bought, or unsold units returned), `coins`, `items`, and running totals `collectedQty`, `collectedCoins` |
+| `overflow` | changes queued before the account loaded exceeded the safety limit | `dropped` |
 | `baseline` | first ever sight of a slot (no earlier memory): records what is there, implies no fill | |
 | `anomaly` | the filled quantity went down (should not happen) | `note` |
 | `login`, `logout`, `exit`, `start`, `stop` | session changes (`exit` = the client was closed while logged in) | `world`, `version` |
@@ -66,7 +68,8 @@ tools written for it read this file too.
 | `timestamp`, `timestampIso` | when this file was written |
 | `rsn`, `accountHash`, `world`, `gameState`, `loggedIn`, `lastLogin`, `lastLogout` | the session |
 | `heartbeatSeconds`, `sections` | the save interval, and which optional sections are switched on |
-| `grandExchange.offers."0"…"7"` | each slot: `state`, `itemId`, `itemName`, `listedPrice`, `totalQuantity`, `completedQuantity`, `remainingQuantity`, `spent`, `placedAt`, `placedOffline`, `lastFillAt`, `observedAt` (times in epoch ms) |
+| `health` | since the plugin started: `eventsWritten`, `writeFailures`, `anomalies`, `reconcileFixes` (slots the login check corrected), `overflowed`, `pending` |
+| `grandExchange.offers."0"…"7"` | each slot: `state`, `itemId`, `itemName`, `listedPrice`, `totalQuantity`, `completedQuantity`, `remainingQuantity`, `spent`, `placedAt`, `placedOffline`, `lastFillAt`, `observedAt` (times in epoch ms), `collectedQuantity`, `collectedCoins` |
 | `skills` | per skill: `level`, `boostedLevel`, `xp`; plus `combatLevel`, `totalLevel`, `totalXp` (optional) |
 | `inventory`, `equipment` | `items` by slot: `id`, `name`, `quantity`, `price`, `value` (optional) |
 | `bank`, `bankLastSeenTimestamp`, `bankFromCache` | the bank as of the last time it was opened (optional) |
@@ -88,8 +91,8 @@ The Grand Exchange slots and the event log are always written; they are what the
 
 ## Known limits
 
-- **Partial collections.** Collecting part of an offer that is still filling is not visible to the
-  client, so it is not logged. The offer's totals stay correct.
+- **Collections elsewhere.** Collection boxes are only seen while a collection interface is open in this
+  client; collecting on mobile is not seen.
 - **Login timing.** Fills made while you were logged out are only known to have happened between
   `since` and the login.
 

@@ -166,4 +166,23 @@ public class OfferTrackerTest
 		// after the burst, a change is live again
 		assertNull(t.observe(0, buy(15, 2_840_010), T0 + 120_000, false).get(0).get("offline"));
 	}
+	@Test
+	public void collectionsAccumulatePerOrderAndResetWithANewOrder()
+	{
+		OfferTracker t = remembering(buy(10, 1_893_340), T0 - 1_000);
+		t.observe(0, buy(10, 1_893_340), T0);
+		Map<String, Object> e = t.collect(0, 6, 0, java.util.Collections.emptyList(), T0 + 1);
+		assertEquals("collected", e.get("type"));
+		assertEquals(6, e.get("collectedQty"));
+		t.observe(0, buy(15, 2_840_010), T0 + 2);                  // later fills keep the running total
+		assertEquals(6, t.get(0).collectedQty);
+		assertEquals(10, ((Map<String, Object>) t.collect(0, 4, 0, java.util.Collections.emptyList(), T0 + 3)).get("collectedQty"));
+		@SuppressWarnings("unchecked")
+		Map<String, Object> slot = (Map<String, Object>) ((Map<String, Object>) t.toJson().get("offers")).get("0");
+		assertEquals(10, slot.get("collectedQuantity"));
+		t.observe(0, empty(), T0 + 4);
+		t.observe(0, new OfferTracker.Offer(3140, "Dragon chainbody", "SELLING", 197_452, 15, 0, 0), T0 + 5);
+		assertEquals(0, t.get(0).collectedQty);                    // a new order starts from nothing
+		assertNull(t.collect(1, 3, 0, java.util.Collections.emptyList(), T0 + 6));   // nothing in that slot to own it
+	}
 }

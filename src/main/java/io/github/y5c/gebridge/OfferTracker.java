@@ -35,6 +35,9 @@ final class OfferTracker
 		boolean placedOffline;
 		Long lastFillAt;
 		long observedAt;
+		// taken out of the collection box while this order was in the slot: the order's own item, and coins
+		int collectedQty;
+		long collectedCoins;
 
 		Offer(int itemId, String item, String state, long price, int total, int done, long spent)
 		{
@@ -192,6 +195,8 @@ final class OfferTracker
 		snap.placedAt = prev.placedAt;
 		snap.placedOffline = prev.placedOffline;
 		snap.lastFillAt = prev.lastFillAt;
+		snap.collectedQty = prev.collectedQty;
+		snap.collectedCoins = prev.collectedCoins;
 		final int d = snap.done - prev.done;
 		if (d > 0)
 		{
@@ -207,6 +212,29 @@ final class OfferTracker
 		addStateChange(out, slot, prev.state, snap, now, offline, since);
 		slots[slot] = snap;
 		return out;
+	}
+
+	/**
+	 * Items taken out of a slot's collection box. {@code qty} is the order's own item (units bought, or unsold units
+	 * returned), {@code coins} the coins (sale proceeds, or a buy's refund). Returns the event, or null when the slot
+	 * holds no order to attribute it to.
+	 */
+	Map<String, Object> collect(int slot, int qty, long coins, List<Map<String, Object>> items, long now)
+	{
+		final Offer o = slot >= 0 && slot < SLOTS ? slots[slot] : null;
+		if (o == null || o.isEmpty() || (qty <= 0 && coins <= 0))
+		{
+			return null;
+		}
+		o.collectedQty += Math.max(0, qty);
+		o.collectedCoins += Math.max(0, coins);
+		final Map<String, Object> e = event("collected", slot, o, now, false, null);
+		e.put("qty", qty);
+		e.put("coins", coins);
+		e.put("items", items);
+		e.put("collectedQty", o.collectedQty);
+		e.put("collectedCoins", o.collectedCoins);
+		return e;
 	}
 
 	private static boolean isTerminal(String state)
@@ -298,6 +326,8 @@ final class OfferTracker
 				m.put("placedAt", o.placedAt);
 				m.put("placedOffline", o.placedOffline);
 				m.put("lastFillAt", o.lastFillAt);
+				m.put("collectedQuantity", o.collectedQty);
+				m.put("collectedCoins", o.collectedCoins);
 			}
 			offers.put(Integer.toString(i), m);
 		}

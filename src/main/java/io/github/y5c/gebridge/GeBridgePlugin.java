@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +33,7 @@ import net.runelite.api.events.GrandExchangeOfferChanged;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.gameval.InventoryID;
+import net.runelite.api.gameval.ItemID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -73,10 +75,7 @@ public class GeBridgePlugin extends Plugin
 	// changes that arrive before the account's memory has loaded wait here; the cap only guards against a runaway.
 	// Anything over it is counted in health and reported by an "overflow" event, never dropped silently
 	private static final int MAX_PENDING = 4096;
-	// Experimental probe: the client keeps item containers per GE slot. Which of these is the collection box is not
-	// documented; recording their changes ("container" events) lets that be settled from real play.
-	private static final int[] GE_OFFER_INVS = {InventoryID.GE_OFFER_0, InventoryID.GE_OFFER_1, InventoryID.GE_OFFER_2,
-		InventoryID.GE_OFFER_3, InventoryID.GE_OFFER_4, InventoryID.GE_OFFER_5, InventoryID.GE_OFFER_6, InventoryID.GE_OFFER_7};
+	// the collection box of each GE slot (slots 0-5 carry the older trading-post names)
 	private static final int[] GE_COLLECT_INVS = {InventoryID.TRADINGPOST_SELL_0, InventoryID.TRADINGPOST_SELL_1,
 		InventoryID.TRADINGPOST_SELL_2, InventoryID.TRADINGPOST_SELL_3, InventoryID.TRADINGPOST_SELL_4,
 		InventoryID.TRADINGPOST_SELL_5, InventoryID.GE_COLLECT_6, InventoryID.GE_COLLECT_7};
@@ -122,7 +121,7 @@ public class GeBridgePlugin extends Plugin
 	private Map<String, Object> levelsCache;
 	private boolean exiting;
 	private int pendingDropped;
-	private final Map<Integer, String> containerSeen = new java.util.HashMap<>();
+	private final Map<Integer, Map<Integer, Integer>> collectBoxes = new HashMap<>();
 
 	// health counters since the plugin started (writeFailures is bumped on the io thread)
 	private long healthSince;
@@ -191,7 +190,7 @@ public class GeBridgePlugin extends Plugin
 		skillsCache = inventoryCache = equipmentCache = bankCache = null;
 		levelsCache = null;
 		pendingDropped = 0;
-		containerSeen.clear();
+		collectBoxes.clear();
 	}
 
 	@Subscribe
@@ -245,6 +244,7 @@ public class GeBridgePlugin extends Plugin
 				writeState(now);
 				tracker.resetSession();
 			}
+			collectBoxes.clear();
 		}
 		if (s == GameState.LOGGING_IN || s == GameState.LOGGED_IN)
 		{
@@ -280,68 +280,86 @@ public class GeBridgePlugin extends Plugin
 		}
 		else
 		{
-			probeGeContainer(e.getContainerId(), e.getItemContainer());
+			onCollectionBox(e.getContainerId(), e.getItemContainer());
 		}
 	}
 
-	private void probeGeContainer(int id, ItemContainer c)
+	/**
+	 * Collection boxes: the client keeps one item container per GE slot holding what is waiting to be collected. It
+	 * grows as the offer fills or is aborted and shrinks only when the player collects, so a fall in an item's quantity
+	 * is a collection: of the order's item (bought units, or unsold units returned) or of coins. Contents are only sent
+	 * while a collection interface is open; the first sight of a box in a session is its baseline.
+	 */
+	private void onCollectionBox(int id, ItemContainer c)
 	{
-		String family = null;
 		int slot = -1;
 		for (int i = 0; i < OfferTracker.SLOTS; i++)
 		{
-			if (GE_OFFER_INVS[i] == id)
+			if (GE_COLLECT_INVS[i] == id)
 			{
-				family = "offer";
-				slot = i;
-			}
-			else if (GE_COLLECT_INVS[i] == id)
-			{
-				family = "collect";
 				slot = i;
 			}
 		}
-		if (family == null)
+		if (slot < 0)
 		{
 			return;
 		}
-		final List<Map<String, Object>> items = new ArrayList<>();
-		final Item[] all = c == null ? new Item[0] : c.getItems();
-		for (Item it : all)
+		final Map<Integer, Integer> now = new HashMap<>();
+		for (Item it : c == null ? new Item[0] : c.getItems())
 		{
 			if (it != null && it.getId() > 0 && it.getQuantity() > 0)
 			{
-				final Map<String, Object> m = new LinkedHashMap<>();
-				m.put("id", it.getId());
-				m.put("name", itemManager.getItemComposition(it.getId()).getName());
-				m.put("quantity", it.getQuantity());
-				items.add(m);
+				now.merge(it.getId(), it.getQuantity(), Integer::sum);
 			}
 		}
-		final String key = items.toString();
-		if (key.equals(containerSeen.put(id, key)))
+		final Map<Integer, Integer> before = collectBoxes.put(slot, now);
+		if (before == null)
 		{
 			return;
 		}
-		final long now = System.currentTimeMillis();
-		final Map<String, Object> ev = new LinkedHashMap<>();
-		ev.put("ts", OfferTracker.iso(now));
-		ev.put("t", now);
-		ev.put("type", "container");
-		ev.put("family", family);
-		ev.put("slot", slot);
-		ev.put("containerId", id);
-		ev.put("items", items);
 		final OfferTracker.Offer o = tracker == null ? null : tracker.get(slot);
-		if (o != null && !o.isEmpty())
+		final int orderItem = o == null ? -1 : o.itemId;
+		int qty = 0;
+		long coins = 0;
+		final List<Map<String, Object>> items = new ArrayList<>();
+		for (Map.Entry<Integer, Integer> b : before.entrySet())
 		{
-			// the offer in that slot when the container changed, so the two can be lined up
-			ev.put("offerItemId", o.itemId);
-			ev.put("offerSide", o.side());
-			ev.put("offerDone", o.done);
-			ev.put("offerTotal", o.total);
+			final int gone = b.getValue() - now.getOrDefault(b.getKey(), 0);
+			if (gone <= 0)
+			{
+				continue;
+			}
+			final int canon = itemManager.canonicalize(b.getKey());
+			final Map<String, Object> m = new LinkedHashMap<>();
+			m.put("id", b.getKey());
+			m.put("name", itemManager.getItemComposition(b.getKey()).getName());
+			m.put("quantity", gone);
+			items.add(m);
+			if (b.getKey() == ItemID.COINS)
+			{
+				coins += gone;
+			}
+			else if (canon == orderItem || b.getKey() == orderItem)
+			{
+				qty += gone;
+			}
 		}
-		whenReady(() -> emit(ev));
+		if (items.isEmpty())
+		{
+			return;
+		}
+		final int s = slot;
+		final int q = qty;
+		final long gp = coins;
+		final long t = System.currentTimeMillis();
+		whenReady(() ->
+		{
+			final Map<String, Object> ev = tracker.collect(s, q, gp, items, t);
+			if (ev != null)
+			{
+				emit(ev);
+			}
+		});
 	}
 
 	@Subscribe
@@ -526,6 +544,8 @@ public class GeBridgePlugin extends Plugin
 		o.placedAt = num(m, "placedAt", null);
 		o.placedOffline = m.has("placedOffline") && m.get("placedOffline").getAsBoolean();
 		o.lastFillAt = num(m, "lastFillAt", null);
+		o.collectedQty = num(m, "collectedQuantity", 0).intValue();
+		o.collectedCoins = num(m, "collectedCoins", 0);
 		final Long seen = num(m, "observedAt", null);
 		o.observedAt = seen == null ? 0 : seen;
 		return o;
