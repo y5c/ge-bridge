@@ -16,6 +16,7 @@ tools (spreadsheets, scripts, trade journals) can use them.
   events.jsonl                 one line per change, appended
   events-<UTC time>.jsonl      older event logs (the newest six are kept)
   state.json                   the current snapshot
+  account.json                 quest states and achievement diary completion
 ```
 
 `<account id>` is RuneLite's numeric account hash, so several accounts on one computer each get their
@@ -73,6 +74,14 @@ tools written for it read this file too.
 | `skills` | per skill: `level`, `boostedLevel`, `xp`; plus `combatLevel`, `totalLevel`, `totalXp` (optional) |
 | `inventory`, `equipment` | `items` by slot: `id`, `name`, `quantity`, `price`, `value` (optional) |
 | `bank`, `bankLastSeenTimestamp`, `bankFromCache` | the bank as of the last time it was opened (optional) |
+| `potionStore`, `potionStoreLastSeenTimestamp` | the bank's potion storage, which is not part of the bank container: per potion `id`, `name`, `doses`, `withdrawDoses`, `pricePerDose`, `value` (with the bank setting) |
+
+## account.json
+
+Written once your login has settled and refreshed about every ten minutes while logged in, but only rewritten
+when something changed. `quests`: counts by state and `entries` per quest (`name`, `state`: `NOT_STARTED`,
+`IN_PROGRESS`, `FINISHED`). `achievementDiaries`: per region and tier (`easy` … `elite`) whether it is
+complete, from the game's own completion flags, plus totals. Same field names as the Local Data Exporter.
 
 `state.json` is also the plugin's memory between sessions. If you delete it, the next login starts again
 from `baseline` lines.
@@ -81,9 +90,10 @@ from `baseline` lines.
 
 | setting | default | |
 |---|---|---|
-| Write bank | on | include the bank in state.json |
+| Write bank | on | include the bank and its potion storage in state.json |
 | Write skills | on | include skills and levels |
 | Write inventory and equipment | on | |
+| Write quests and diaries | on | account.json |
 | Save interval | 30 s | 10–300 s |
 | Event log size (MB) | 5 | 1–50; the size at which events.jsonl is archived |
 

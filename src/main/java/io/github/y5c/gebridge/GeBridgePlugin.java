@@ -19,6 +19,11 @@ import java.util.concurrent.atomic.AtomicLong;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
+import net.runelite.api.EnumComposition;
+import net.runelite.api.EnumID;
+import net.runelite.api.Quest;
+import net.runelite.api.QuestState;
+import net.runelite.api.ScriptID;
 import net.runelite.api.GameState;
 import net.runelite.api.GrandExchangeOffer;
 import net.runelite.api.GrandExchangeOfferState;
@@ -67,7 +72,7 @@ import net.runelite.client.util.Filepath;
 public class GeBridgePlugin extends Plugin
 {
 	static final int SCHEMA = 1;
-	static final String VERSION = "0.3.0";
+	static final String VERSION = "0.4.0";
 	private static final long FLUSH_MIN_MS = 1_000;
 	// slots that got no event at login are read from the client this many ticks after it (RuneLite's own GE
 	// plugin sees the login burst end within 2 ticks; 10 leaves a wide margin before an EMPTY is believed)
@@ -81,6 +86,9 @@ public class GeBridgePlugin extends Plugin
 		InventoryID.TRADINGPOST_SELL_5, InventoryID.GE_COLLECT_6, InventoryID.GE_COLLECT_7};
 	// a GE change this many ticks after login is still the login burst: it happened while logged out
 	private static final int LOGIN_BURST_TICKS = 5;
+	// account.json: first written once the login has settled, then refreshed about every ten minutes while logged in
+	private static final int ACCOUNT_FIRST_TICKS = RECONCILE_AFTER_TICKS + 5;
+	private static final int ACCOUNT_EVERY_TICKS = 1000;
 
 	@Inject
 	private Client client;
@@ -130,6 +138,13 @@ public class GeBridgePlugin extends Plugin
 	private long reconcileFixes;
 	private long overflowed;
 	private final AtomicLong writeFailures = new AtomicLong();
+	private long readFailures;
+
+	private int accountTick = -1;
+	private String accountText;
+	private boolean potionsStale;
+	private JsonElement potionCache;
+	private long potionSeenMs;
 
 	@Provides
 	GeBridgeConfig provideConfig(ConfigManager configManager)
@@ -191,6 +206,10 @@ public class GeBridgePlugin extends Plugin
 		levelsCache = null;
 		pendingDropped = 0;
 		collectBoxes.clear();
+		accountTick = -1;
+		accountText = null;
+		potionsStale = false;
+		potionCache = null;
 	}
 
 	@Subscribe
@@ -230,6 +249,7 @@ public class GeBridgePlugin extends Plugin
 			loggedIn = true;
 			loginTick = client.getTickCount();
 			reconciled = false;
+			accountTick = -1;
 			lastLogin = OfferTracker.iso(now);
 			whenReady(() -> emit(simple("login")));
 		}
@@ -272,6 +292,7 @@ public class GeBridgePlugin extends Plugin
 			bankCache = container(e.getItemContainer(), true);
 			bankFromCache = false;
 			bankSeenMs = System.currentTimeMillis();
+			potionsStale = true;      // read on the next tick, outside the container event
 			dirty = true;
 		}
 		else if (e.getContainerId() == InventoryID.INV || e.getContainerId() == InventoryID.WORN)
@@ -413,6 +434,18 @@ public class GeBridgePlugin extends Plugin
 				}
 			}
 		}
+		if (potionsStale && loggedIn)
+		{
+			potionsStale = false;
+			readPotionStore(now);
+		}
+		final int sinceLogin = client.getTickCount() - loginTick;
+		if (loggedIn && config.writeAccount() && sinceLogin >= ACCOUNT_FIRST_TICKS
+			&& (accountTick < 0 || client.getTickCount() - accountTick >= ACCOUNT_EVERY_TICKS))
+		{
+			accountTick = client.getTickCount();
+			writeAccount(now);
+		}
 		if ((dirty && now - lastWriteMs >= FLUSH_MIN_MS) || now - lastWriteMs >= config.heartbeatSeconds() * 1000L)
 		{
 			writeState(now);
@@ -524,6 +557,12 @@ public class GeBridgePlugin extends Plugin
 					bankCache = prev.get("bank");
 					bankFromCache = true;
 					bankSeenMs = prev.has("bankLastSeenTimestamp") && !prev.get("bankLastSeenTimestamp").isJsonNull() ? prev.get("bankLastSeenTimestamp").getAsLong() : 0;
+				}
+				if (prev.has("potionStore") && prev.get("potionStore").isJsonObject())
+				{
+					potionCache = prev.get("potionStore");
+					potionSeenMs = prev.has("potionStoreLastSeenTimestamp") && !prev.get("potionStoreLastSeenTimestamp").isJsonNull()
+						? prev.get("potionStoreLastSeenTimestamp").getAsLong() : 0;
 				}
 				skillsCache = prev.get("skills");
 				inventoryCache = prev.get("inventory");
@@ -693,6 +732,154 @@ public class GeBridgePlugin extends Plugin
 		equipmentCache = container(client.getItemContainer(InventoryID.WORN), false);
 	}
 
+	/**
+	 * The bank's potion storage, which is not part of the bank container. Read the way RuneLite's bank tags plugin
+	 * reads it: each stored potion's doses come from the game's own potion-store script.
+	 */
+	private void readPotionStore(long now)
+	{
+		try
+		{
+			final JsonObject items = new JsonObject();
+			long value = 0;
+			for (int listId : new int[]{EnumID.POTIONSTORE_POTIONS, EnumID.POTIONSTORE_UNFINISHED_POTIONS})
+			{
+				for (int potionEnumId : client.getEnum(listId).getIntVals())
+				{
+					final EnumComposition potion = client.getEnum(potionEnumId);
+					client.runScript(ScriptID.POTIONSTORE_DOSES, potionEnumId);
+					final int doses = client.getIntStack()[0];
+					client.runScript(ScriptID.POTIONSTORE_WITHDRAW_DOSES, potionEnumId);
+					final int withdraw = client.getIntStack()[0];
+					if (doses <= 0 || withdraw <= 0)
+					{
+						continue;
+					}
+					final int itemId = potion.getIntValue(withdraw);
+					final String name = itemManager.getItemComposition(itemId).getName();
+					final double perDose = (double) itemManager.getItemPrice(itemManager.canonicalize(itemId)) / withdraw;
+					final JsonObject v = new JsonObject();
+					v.addProperty("id", itemId);
+					v.addProperty("name", name);
+					v.addProperty("doses", doses);
+					v.addProperty("withdrawDoses", withdraw);
+					v.addProperty("pricePerDose", Math.round(perDose));
+					v.addProperty("value", Math.round(perDose * doses));
+					items.add(name, v);
+					value += Math.round(perDose * doses);
+				}
+			}
+			final JsonObject out = new JsonObject();
+			out.addProperty("loaded", true);
+			out.addProperty("value", value);
+			out.addProperty("itemCount", items.size());
+			out.add("items", items);
+			potionCache = out;
+			potionSeenMs = now;
+			dirty = true;
+		}
+		catch (RuntimeException ex)
+		{
+			// a change to the game's potion-store scripts must never stop the GE log
+			readFailures++;
+			log.debug("ge-bridge: potion storage unreadable", ex);
+		}
+	}
+
+	/** account.json: quest states and diary completion, rewritten only when they change. */
+	private void writeAccount(long now)
+	{
+		final Filepath dir = accountDir;
+		if (dir == null)
+		{
+			return;
+		}
+		final Map<String, Object> quests = new LinkedHashMap<>();
+		final Map<String, Object> entries = new LinkedHashMap<>();
+		int notStarted = 0;
+		int inProgress = 0;
+		int finished = 0;
+		int unknown = 0;
+		try
+		{
+			for (Quest q : Quest.values())
+			{
+				QuestState st;
+				try
+				{
+					st = q.getState(client);
+				}
+				catch (RuntimeException ex)
+				{
+					st = null;
+				}
+				final Map<String, Object> m = new LinkedHashMap<>();
+				m.put("name", q.getName());
+				m.put("state", st == null ? "UNKNOWN" : st.name());
+				entries.put(q.name(), m);
+				if (st == QuestState.FINISHED)
+				{
+					finished++;
+				}
+				else if (st == QuestState.IN_PROGRESS)
+				{
+					inProgress++;
+				}
+				else if (st == QuestState.NOT_STARTED)
+				{
+					notStarted++;
+				}
+				else
+				{
+					unknown++;
+				}
+			}
+			quests.put("notStarted", notStarted);
+			quests.put("inProgress", inProgress);
+			quests.put("finished", finished);
+			quests.put("unknown", unknown);
+			quests.put("total", entries.size());
+			quests.put("entries", entries);
+			final Map<String, Object> diaries = AccountData.diaries(client::getVarbitValue);
+			final Map<String, Object> body = new LinkedHashMap<>();
+			body.put("quests", quests);
+			body.put("achievementDiaries", diaries);
+			final String key = gson.toJson(body);
+			if (key.equals(accountText))
+			{
+				return;
+			}
+			accountText = key;
+			final Map<String, Object> doc = new LinkedHashMap<>();
+			doc.put("schema", SCHEMA);
+			doc.put("version", "ge-bridge " + VERSION);
+			doc.put("timestamp", now);
+			doc.put("timestampIso", OfferTracker.iso(now));
+			doc.put("rsn", rsn);
+			doc.putAll(body);
+			final String text = gson.toJson(doc);
+			io.submit(() ->
+			{
+				try
+				{
+					final Filepath tmp = dir.joinSegment("account.json.tmp");
+					tmp.write(text);
+					tmp.moveTo(dir.joinSegment("account.json"), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+				}
+				catch (IOException ex)
+				{
+					writeFailures.incrementAndGet();
+					log.warn("ge-bridge: cannot write account.json", ex);
+				}
+			});
+		}
+		catch (RuntimeException ex)
+		{
+			readFailures++;
+			log.debug("ge-bridge: account data unreadable", ex);
+		}
+	}
+
 	private JsonObject container(ItemContainer c, boolean skipPlaceholders)
 	{
 		final JsonObject items = new JsonObject();
@@ -755,6 +942,7 @@ public class GeBridgePlugin extends Plugin
 		health.addProperty("since", OfferTracker.iso(healthSince));
 		health.addProperty("eventsWritten", eventsWritten);
 		health.addProperty("writeFailures", writeFailures.get());
+		health.addProperty("readFailures", readFailures);
 		health.addProperty("anomalies", anomalies);
 		health.addProperty("reconcileFixes", reconcileFixes);
 		health.addProperty("overflowed", overflowed);
@@ -781,6 +969,8 @@ public class GeBridgePlugin extends Plugin
 			s.addProperty("bankFromCache", bankFromCache);
 			s.addProperty("bankLastSeenTimestamp", bankSeenMs > 0 ? bankSeenMs : null);
 			s.add("bank", bankCache);
+			s.add("potionStore", potionCache);
+			s.addProperty("potionStoreLastSeenTimestamp", potionSeenMs > 0 ? potionSeenMs : null);
 		}
 		s.add("grandExchange", gson.toJsonTree(tracker.toJson()));
 		return s;
