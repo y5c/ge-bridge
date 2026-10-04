@@ -49,6 +49,8 @@ moved so far).
 | `cleared` | the offer leaves its slot (collected) | `unobserved: true` if it left without the plugin seeing it finish, so later fills may be missing |
 | `collected` | items or coins are taken out of the slot's collection box while the offer is still there (e.g. collecting part of a filling bid) | `qty` (the offer's own item: units bought, or unsold units returned), `coins`, `items`, and running totals `collectedQty`, `collectedCoins` |
 | `overflow` | changes queued before the account loaded exceeded the safety limit | `dropped` |
+| `decant` | potions of one kind swap for other dose sizes in one inventory change with the doses unchanged (Bob Barter's decanting, or combining by hand) | `potion`, `doses`, `from` and `to` (each `id`, `name`, `quantity`) |
+| `history` | the Grand Exchange trade history screen is open and its contents changed | `rows`: the screen's list as shown (`i`, and `itemId`/`itemName`/`quantity` for item icons, `text` for text), recorded unparsed |
 | `baseline` | first ever sight of a slot (no earlier memory): records what is there, implies no fill | |
 | `anomaly` | the filled quantity went down (should not happen) | `note` |
 | `login`, `logout`, `exit`, `start`, `stop` | session changes (`exit` = the client was closed while logged in) | `world`, `version` |
@@ -101,6 +103,8 @@ The Grand Exchange slots and the event log are always written; they are what the
 
 ## Known limits
 
+- **Trade history is raw.** The `history` rows are recorded exactly as the screen lists them; reading trades
+  out of them is up to your tool, so a layout change in the game cannot make the plugin write wrong trades.
 - **Collections elsewhere.** Collection boxes are only seen while a collection interface is open in this
   client; collecting on mobile is not seen.
 - **Login timing.** Fills made while you were logged out are only known to have happened between

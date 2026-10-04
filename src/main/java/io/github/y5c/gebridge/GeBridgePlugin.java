@@ -37,7 +37,9 @@ import net.runelite.api.events.GameTick;
 import net.runelite.api.events.GrandExchangeOfferChanged;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.StatChanged;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
+import net.runelite.api.widgets.Widget;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
@@ -72,7 +74,7 @@ import net.runelite.client.util.Filepath;
 public class GeBridgePlugin extends Plugin
 {
 	static final int SCHEMA = 1;
-	static final String VERSION = "0.4.0";
+	static final String VERSION = "0.5.0";
 	private static final long FLUSH_MIN_MS = 1_000;
 	// slots that got no event at login are read from the client this many ticks after it (RuneLite's own GE
 	// plugin sees the login burst end within 2 ticks; 10 leaves a wide margin before an EMPTY is believed)
@@ -140,6 +142,8 @@ public class GeBridgePlugin extends Plugin
 	private final AtomicLong writeFailures = new AtomicLong();
 	private long readFailures;
 
+	private Map<Integer, Integer> lastInventory;
+	private String lastHistory;
 	private int accountTick = -1;
 	private String accountText;
 	private boolean potionsStale;
@@ -208,6 +212,8 @@ public class GeBridgePlugin extends Plugin
 		collectBoxes.clear();
 		accountTick = -1;
 		accountText = null;
+		lastInventory = null;
+		lastHistory = null;
 		potionsStale = false;
 		potionCache = null;
 	}
@@ -295,7 +301,12 @@ public class GeBridgePlugin extends Plugin
 			potionsStale = true;      // read on the next tick, outside the container event
 			dirty = true;
 		}
-		else if (e.getContainerId() == InventoryID.INV || e.getContainerId() == InventoryID.WORN)
+		else if (e.getContainerId() == InventoryID.INV)
+		{
+			dirty = true;
+			inventoryChanged(e.getItemContainer());
+		}
+		else if (e.getContainerId() == InventoryID.WORN)
 		{
 			dirty = true;
 		}
@@ -433,6 +444,10 @@ public class GeBridgePlugin extends Plugin
 					});
 				}
 			}
+		}
+		if (loggedIn)
+		{
+			readTradeHistory(now);
 		}
 		if (potionsStale && loggedIn)
 		{
@@ -730,6 +745,113 @@ public class GeBridgePlugin extends Plugin
 		// logged in, a container the server never sent is an empty one (an empty inventory at login is not sent)
 		inventoryCache = container(client.getItemContainer(InventoryID.INV), false);
 		equipmentCache = container(client.getItemContainer(InventoryID.WORN), false);
+	}
+
+	/** Decanting: potions of one kind swapped for other dose sizes in one inventory change, doses unchanged. */
+	private void inventoryChanged(ItemContainer c)
+	{
+		final Map<Integer, Integer> now = new HashMap<>();
+		for (Item it : c == null ? new Item[0] : c.getItems())
+		{
+			if (it != null && it.getId() > 0 && it.getQuantity() > 0)
+			{
+				now.merge(it.getId(), it.getQuantity(), Integer::sum);
+			}
+		}
+		final Map<Integer, Integer> before = lastInventory;
+		lastInventory = now;
+		if (before == null)
+		{
+			return;
+		}
+		final List<Decants.Change> changes = new ArrayList<>();
+		final java.util.Set<Integer> ids = new java.util.HashSet<>(before.keySet());
+		ids.addAll(now.keySet());
+		for (int id : ids)
+		{
+			final int delta = now.getOrDefault(id, 0) - before.getOrDefault(id, 0);
+			if (delta != 0)
+			{
+				changes.add(new Decants.Change(id, itemManager.getItemComposition(id).getName(), delta));
+			}
+		}
+		final long t = System.currentTimeMillis();
+		for (Map<String, Object> d : Decants.find(changes))
+		{
+			final Map<String, Object> ev = new LinkedHashMap<>();
+			ev.put("ts", OfferTracker.iso(t));
+			ev.put("t", t);
+			ev.put("type", "decant");
+			ev.putAll(d);
+			whenReady(() -> emit(ev));
+		}
+	}
+
+	/**
+	 * The Grand Exchange trade history screen, recorded raw while it is open: each child of its list with its item,
+	 * quantity and text. Reading the rows is left to the consumer, so a change to the screen's layout cannot make
+	 * the plugin write wrong trades, only rows a reader does not understand. Written only when the contents change.
+	 */
+	private void readTradeHistory(long now)
+	{
+		final Widget list = client.getWidget(InterfaceID.GeHistory.LIST);
+		if (list == null || list.isHidden())
+		{
+			return;
+		}
+		try
+		{
+			final List<Map<String, Object>> rows = new ArrayList<>();
+			final Widget[] kids = list.getDynamicChildren();
+			for (int i = 0; kids != null && i < kids.length; i++)
+			{
+				final Widget w = kids[i];
+				if (w == null || w.isHidden())
+				{
+					continue;
+				}
+				final String text = w.getText();
+				final int item = w.getItemId();
+				if ((text == null || text.isEmpty()) && item <= 0)
+				{
+					continue;
+				}
+				final Map<String, Object> m = new LinkedHashMap<>();
+				m.put("i", i);
+				if (item > 0)
+				{
+					m.put("itemId", item);
+					m.put("itemName", itemManager.getItemComposition(item).getName());
+					m.put("quantity", w.getItemQuantity());
+				}
+				if (text != null && !text.isEmpty())
+				{
+					m.put("text", text);
+				}
+				rows.add(m);
+			}
+			if (rows.isEmpty())
+			{
+				return;
+			}
+			final String key = rows.toString();
+			if (key.equals(lastHistory))
+			{
+				return;
+			}
+			lastHistory = key;
+			final Map<String, Object> ev = new LinkedHashMap<>();
+			ev.put("ts", OfferTracker.iso(now));
+			ev.put("t", now);
+			ev.put("type", "history");
+			ev.put("rows", rows);
+			whenReady(() -> emit(ev));
+		}
+		catch (RuntimeException ex)
+		{
+			readFailures++;
+			log.debug("ge-bridge: trade history unreadable", ex);
+		}
 	}
 
 	/**
