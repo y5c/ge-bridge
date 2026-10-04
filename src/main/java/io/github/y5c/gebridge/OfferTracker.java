@@ -85,8 +85,43 @@ final class OfferTracker
 		}
 	}
 
+	/**
+	 * A sale to Jagex's GE item sink. The client shows it in a slot whose offer is EMPTY, from the
+	 * {@code ge_itemsink_*} varps rather than the offer, so it never reaches {@code GrandExchangeOfferChanged}.
+	 * Always one unit; the game labels it "Sold" once the slot's tax varp is below Integer.MAX_VALUE, "Selling" before.
+	 */
+	static final class Sink
+	{
+		final int itemId;
+		final String item;
+		final long price;
+		final long tax;
+
+		Sink(int itemId, String item, long price, long tax)
+		{
+			this.itemId = itemId;
+			this.item = item;
+			this.price = price;
+			this.tax = tax;
+		}
+
+		boolean sold()
+		{
+			return tax < Integer.MAX_VALUE;
+		}
+
+		boolean same(Sink o)
+		{
+			return o != null && itemId == o.itemId && price == o.price && sold() == o.sold();
+		}
+	}
+
 	private final Offer[] slots = new Offer[SLOTS];
 	private final boolean[] seen = new boolean[SLOTS];
+	private final Sink[] sinks = new Sink[SLOTS];
+	private final boolean[] sinkSeen = new boolean[SLOTS];
+	// false until the slot's item-sink state is remembered (a state.json from before sinks were tracked has none)
+	private final boolean[] sinkKnown = new boolean[SLOTS];
 	// when each slot was last observed before this session began: the start of the window for an offline change
 	private final Long[] sessionStart = new Long[SLOTS];
 
@@ -108,12 +143,26 @@ final class OfferTracker
 		sessionStart[slot] = o == null ? null : o.observedAt;
 	}
 
+	/** Install the remembered item-sink sale for a slot ({@code null} = none); it counts as not yet seen this session. */
+	void restoreSink(int slot, Sink s)
+	{
+		sinks[slot] = s;
+		sinkSeen[slot] = false;
+		sinkKnown[slot] = true;
+	}
+
+	Sink getSink(int slot)
+	{
+		return sinks[slot];
+	}
+
 	/** A logout: the next observation of every slot is a first sight again. */
 	void resetSession()
 	{
 		for (int i = 0; i < SLOTS; i++)
 		{
 			seen[i] = false;
+			sinkSeen[i] = false;
 			sessionStart[i] = slots[i] == null ? null : slots[i].observedAt;
 		}
 	}
@@ -251,6 +300,62 @@ final class OfferTracker
 		return "buy".equals(o.side()) || o.state.startsWith("CANCELLED") ? gone : 0;
 	}
 
+	/**
+	 * Diff a slot's item-sink varps ({@code snap}, {@code null} when empty) against memory. Called each tick once the
+	 * login settles, so the first observation in a session is the one that can be offline.
+	 */
+	List<Map<String, Object>> observeSink(int slot, Sink snap, long now)
+	{
+		if (slot < 0 || slot >= SLOTS)
+		{
+			return Collections.emptyList();
+		}
+		final Sink prev = sinks[slot];
+		final boolean known = sinkKnown[slot];
+		final boolean offline = !sinkSeen[slot] && sessionStart[slot] != null;
+		final Long since = offline ? sessionStart[slot] : null;
+		sinkSeen[slot] = true;
+		sinkKnown[slot] = true;
+		sinks[slot] = snap;
+		if (snap == null ? prev == null : snap.same(prev))
+		{
+			return Collections.emptyList();
+		}
+		final List<Map<String, Object>> out = new ArrayList<>();
+		if (snap == null)
+		{
+			out.add(sinkEvent("cleared", slot, prev, now, offline, since));
+		}
+		else if (!known)
+		{
+			// nothing remembered: record what is there, book nothing
+			out.add(sinkEvent("baseline", slot, snap, now, false, null));
+		}
+		else
+		{
+			final Map<String, Object> e = sinkEvent("sink", slot, snap, now, offline, since);
+			if (snap.sold())
+			{
+				e.put("qty", 1);
+				e.put("gp", snap.price);
+			}
+			out.add(e);
+		}
+		return out;
+	}
+
+	private static Map<String, Object> sinkEvent(String type, int slot, Sink s, long now, boolean offline, Long since)
+	{
+		final Offer o = new Offer(s.itemId, s.item, s.sold() ? "SOLD" : "SELLING", s.price, 1, s.sold() ? 1 : 0, s.sold() ? s.price : 0);
+		final Map<String, Object> e = event(type, slot, o, now, offline, since);
+		e.put("itemSink", true);
+		if (s.sold())
+		{
+			e.put("tax", s.tax);
+		}
+		return e;
+	}
+
 	private static boolean isTerminal(String state)
 	{
 		return state != null && (state.equals("BOUGHT") || state.equals("SOLD") || state.startsWith("CANCELLED"));
@@ -327,6 +432,21 @@ final class OfferTracker
 			m.put("state", o.isEmpty() ? "EMPTY" : o.state);
 			m.put("observedAt", o.observedAt);
 			m.put("seenThisSession", seen[i]);
+			if (sinkKnown[i])
+			{
+				final Sink s = sinks[i];
+				Map<String, Object> sm = null;
+				if (s != null)
+				{
+					sm = new LinkedHashMap<>();
+					sm.put("itemId", s.itemId);
+					sm.put("itemName", s.item);
+					sm.put("price", s.price);
+					sm.put("tax", s.tax);
+					sm.put("sold", s.sold());
+				}
+				m.put("itemSink", sm);
+			}
 			if (!o.isEmpty())
 			{
 				active++;

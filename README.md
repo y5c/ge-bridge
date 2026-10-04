@@ -53,7 +53,15 @@ moved so far).
 | `history` | the Grand Exchange trade history screen is open and its contents changed | `rows`: the screen's list as shown (`i`, and `itemId`/`itemName`/`quantity` for item icons, `text` for text), recorded unparsed |
 | `baseline` | first ever sight of a slot (no earlier memory): records what is there, implies no fill | |
 | `anomaly` | the filled quantity went down (should not happen) | `note` |
+| `sink` | Jagex's GE item sink bought the item (see below) | `itemSink: true`; once `state` is `SOLD`, also `qty` (always 1), `gp` and `tax` |
 | `login`, `logout`, `exit`, `start`, `stop` | session changes (`exit` = the client was closed while logged in) | `world`, `version` |
+
+**Item-sink sales.** Jagex buys some high-value items (raid uniques, godswords, zenyte jewellery and others) from
+sell offers with GE tax money. The client shows such a sale in a slot whose offer is empty, from separate
+`ge_itemsink_*` variables, so it never appears as an offer change. GE Bridge reads those variables each tick and
+writes a `sink` line (one unit, `side: sell`, `state` `SELLING` or `SOLD` as the game labels it). A later `cleared`
+line with `itemSink: true` means the sale was collected. The sink buys as the sell offer is posted, so there is
+normally no `placed` line for that offer.
 
 Any offer line seen first at login, for a change made while you were away, also carries `offline: true`
 and `since`: the last time the slot was seen before that login. The change happened somewhere between
@@ -72,7 +80,7 @@ tools written for it read this file too.
 | `rsn`, `accountHash`, `world`, `gameState`, `loggedIn`, `lastLogin`, `lastLogout` | the session |
 | `heartbeatSeconds`, `sections` | the save interval, and which optional sections are switched on |
 | `health` | since the plugin started: `eventsWritten`, `writeFailures`, `readFailures` (potion storage or quest/diary data the client would not give), `anomalies`, `reconcileFixes` (slots the login check corrected), `overflowed`, `pending` |
-| `grandExchange.offers."0"…"7"` | each slot: `state`, `itemId`, `itemName`, `listedPrice`, `totalQuantity`, `completedQuantity`, `remainingQuantity`, `spent`, `placedAt`, `placedOffline`, `lastFillAt`, `observedAt` (times in epoch ms), `collectedQuantity`, `collectedCoins` |
+| `grandExchange.offers."0"…"7"` | each slot: `state`, `itemId`, `itemName`, `listedPrice`, `totalQuantity`, `completedQuantity`, `remainingQuantity`, `spent`, `placedAt`, `placedOffline`, `lastFillAt`, `observedAt` (times in epoch ms), `collectedQuantity`, `collectedCoins`; `itemSink`: `itemId`, `itemName`, `price`, `tax`, `sold` for an item-sink sale in the slot, or null |
 | `skills` | per skill: `level`, `boostedLevel`, `xp`; plus `combatLevel`, `totalLevel`, `totalXp` (optional) |
 | `inventory`, `equipment` | `items` by slot: `id`, `name`, `quantity`, `price`, `value` (optional) |
 | `bank`, `bankLastSeenTimestamp`, `bankFromCache` | the bank as of the last time it was opened (optional) |

@@ -195,4 +195,69 @@ public class OfferTrackerTest
 		assertEquals(154, OfferTracker.ownItemCollected(relisted, 154));
 		assertEquals(6, OfferTracker.ownItemCollected(buy(10, 1_893_340), 6));
 	}
+
+	private static OfferTracker.Sink sink(boolean sold)
+	{
+		return new OfferTracker.Sink(20997, "Twisted bow", 1_400_000_000L, sold ? 5_000_000L : Integer.MAX_VALUE);
+	}
+
+	@Test
+	public void itemSinkSaleIsBookedAsOneUnit()
+	{
+		OfferTracker t = remembering(empty(), T0 - 1_000);
+		t.restoreSink(0, null);
+		t.observe(0, empty(), T0);
+		assertTrue(t.observeSink(0, null, T0).isEmpty());
+		List<Map<String, Object>> evs = t.observeSink(0, sink(true), T0 + 1);
+		assertEquals(List.of("sink"), types(evs));
+		assertEquals(1, evs.get(0).get("qty"));
+		assertEquals(1_400_000_000L, evs.get(0).get("gp"));
+		assertEquals("sell", evs.get(0).get("side"));
+		assertEquals(true, evs.get(0).get("itemSink"));
+		assertNull(evs.get(0).get("offline"));
+		// unchanged on later ticks, then collected
+		assertTrue(t.observeSink(0, sink(true), T0 + 2).isEmpty());
+		assertEquals(List.of("cleared"), types(t.observeSink(0, null, T0 + 3)));
+	}
+
+	@Test
+	public void itemSinkSellingBooksNothingUntilSold()
+	{
+		OfferTracker t = remembering(empty(), T0 - 1_000);
+		t.restoreSink(0, null);
+		t.observeSink(0, null, T0);
+		List<Map<String, Object>> evs = t.observeSink(0, sink(false), T0 + 1);
+		assertEquals("SELLING", evs.get(0).get("state"));
+		assertNull(evs.get(0).get("qty"));
+		evs = t.observeSink(0, sink(true), T0 + 2);
+		assertEquals("SOLD", evs.get(0).get("state"));
+		assertEquals(1, evs.get(0).get("qty"));
+	}
+
+	@Test
+	public void itemSinkSaleFirstSeenAtLoginIsOffline()
+	{
+		OfferTracker t = remembering(empty(), T0 - 3_600_000);
+		t.restoreSink(0, null);
+		List<Map<String, Object>> evs = t.observeSink(0, sink(true), T0);
+		assertEquals(true, evs.get(0).get("offline"));
+		assertEquals(OfferTracker.iso(T0 - 3_600_000), evs.get(0).get("since"));
+	}
+
+	@Test
+	public void itemSinkWithNoMemoryIsABaselineAndRememberedOneIsNotRebooked()
+	{
+		// a state.json written before sinks were tracked has no itemSink field
+		OfferTracker t = remembering(empty(), T0 - 1_000);
+		assertEquals(List.of("baseline"), types(t.observeSink(0, sink(true), T0)));
+		OfferTracker r = remembering(empty(), T0 - 1_000);
+		r.restoreSink(0, sink(true));
+		assertTrue(r.observeSink(0, sink(true), T0).isEmpty());
+		@SuppressWarnings("unchecked")
+		Map<String, Object> slot = (Map<String, Object>) ((Map<String, Object>) r.toJson().get("offers")).get("0");
+		@SuppressWarnings("unchecked")
+		Map<String, Object> s = (Map<String, Object>) slot.get("itemSink");
+		assertEquals(1_400_000_000L, s.get("price"));
+		assertEquals(true, s.get("sold"));
+	}
 }

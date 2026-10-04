@@ -41,6 +41,7 @@ import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.gameval.ItemID;
+import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -91,6 +92,20 @@ public class GeBridgePlugin extends Plugin
 	// account.json: first written once the login has settled, then refreshed about every ten minutes while logged in
 	private static final int ACCOUNT_FIRST_TICKS = RECONCILE_AFTER_TICKS + 5;
 	private static final int ACCOUNT_EVERY_TICKS = 1000;
+
+	// a sale to the GE item sink lives in these per-slot varps, not in the slot's offer (see OfferTracker.Sink)
+	private static final int[] SINK_OBJ = {
+		VarPlayerID.GE_ITEMSINK_OBJ_0, VarPlayerID.GE_ITEMSINK_OBJ_1, VarPlayerID.GE_ITEMSINK_OBJ_2, VarPlayerID.GE_ITEMSINK_OBJ_3,
+		VarPlayerID.GE_ITEMSINK_OBJ_4, VarPlayerID.GE_ITEMSINK_OBJ_5, VarPlayerID.GE_ITEMSINK_OBJ_6, VarPlayerID.GE_ITEMSINK_OBJ_7,
+	};
+	private static final int[] SINK_PRICE = {
+		VarPlayerID.GE_ITEMSINK_PRICE_LONG_0, VarPlayerID.GE_ITEMSINK_PRICE_LONG_1, VarPlayerID.GE_ITEMSINK_PRICE_LONG_2, VarPlayerID.GE_ITEMSINK_PRICE_LONG_3,
+		VarPlayerID.GE_ITEMSINK_PRICE_LONG_4, VarPlayerID.GE_ITEMSINK_PRICE_LONG_5, VarPlayerID.GE_ITEMSINK_PRICE_LONG_6, VarPlayerID.GE_ITEMSINK_PRICE_LONG_7,
+	};
+	private static final int[] SLOT_TAX = {
+		VarPlayerID.GE_TAX_SLOT_LONG_0, VarPlayerID.GE_TAX_SLOT_LONG_1, VarPlayerID.GE_TAX_SLOT_LONG_2, VarPlayerID.GE_TAX_SLOT_LONG_3,
+		VarPlayerID.GE_TAX_SLOT_LONG_4, VarPlayerID.GE_TAX_SLOT_LONG_5, VarPlayerID.GE_TAX_SLOT_LONG_6, VarPlayerID.GE_TAX_SLOT_LONG_7,
+	};
 
 	@Inject
 	private Client client;
@@ -461,6 +476,17 @@ public class GeBridgePlugin extends Plugin
 			accountTick = client.getTickCount();
 			writeAccount(now);
 		}
+		if (loggedIn && reconciled)
+		{
+			// polled rather than taken from VarbitChanged: eight varp reads a tick, and no ordering against the login burst
+			for (int i = 0; i < OfferTracker.SLOTS; i++)
+			{
+				for (Map<String, Object> ev : tracker.observeSink(i, readSink(i), now))
+				{
+					emit(ev);
+				}
+			}
+		}
 		if ((dirty && now - lastWriteMs >= FLUSH_MIN_MS) || now - lastWriteMs >= config.heartbeatSeconds() * 1000L)
 		{
 			writeState(now);
@@ -479,6 +505,33 @@ public class GeBridgePlugin extends Plugin
 				emit(ev);
 			}
 		});
+	}
+
+	private OfferTracker.Sink readSink(int slot)
+	{
+		final int id = client.getVarpValue(SINK_OBJ[slot]);
+		if (id <= 0)
+		{
+			return null;
+		}
+		final OfferTracker.Sink prev = tracker.getSink(slot);
+		final long price = longVarp(SINK_PRICE[slot]);
+		final String name = prev != null && prev.itemId == id ? prev.item : itemManager.getItemComposition(id).getName();
+		return new OfferTracker.Sink(id, name, price, longVarp(SLOT_TAX[slot]));
+	}
+
+	// The game script reads these as longs (clamped at 0), but RuneLite 1.13.1 types some of them as int varps and
+	// getVarpLongValue then throws
+	private long longVarp(int varp)
+	{
+		try
+		{
+			return Math.max(0, client.getVarpLongValue(varp));
+		}
+		catch (IllegalArgumentException ex)
+		{
+			return Math.max(0, client.getVarpValue(varp));
+		}
 	}
 
 	private OfferTracker.Offer snapshot(GrandExchangeOffer o)
@@ -564,7 +617,12 @@ public class GeBridgePlugin extends Plugin
 				{
 					if (offers.has(Integer.toString(i)))
 					{
-						t.restore(i, offerFromJson(offers.getAsJsonObject(Integer.toString(i))));
+						final JsonObject slot = offers.getAsJsonObject(Integer.toString(i));
+						t.restore(i, offerFromJson(slot));
+						if (slot.has("itemSink"))
+						{
+							t.restoreSink(i, sinkFromJson(slot.get("itemSink")));
+						}
 					}
 				}
 				if (prev.has("bank") && prev.get("bank").isJsonObject())
@@ -622,6 +680,16 @@ public class GeBridgePlugin extends Plugin
 		final Long seen = num(m, "observedAt", null);
 		o.observedAt = seen == null ? 0 : seen;
 		return o;
+	}
+
+	private static OfferTracker.Sink sinkFromJson(JsonElement e)
+	{
+		if (e == null || !e.isJsonObject())
+		{
+			return null;
+		}
+		final JsonObject m = e.getAsJsonObject();
+		return new OfferTracker.Sink(num(m, "itemId", 0).intValue(), str(m, "itemName"), num(m, "price", 0), num(m, "tax", 0));
 	}
 
 	private static String str(JsonObject m, String k)
