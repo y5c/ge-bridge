@@ -237,6 +237,20 @@ final class OfferTracker
 		return e;
 	}
 
+	/**
+	 * How much of a fall in the order's own item in its collection box counts as collected from that order. A buy
+	 * puts bought units in the box; a sell only gets its item back when it is cancelled. Anything else is the box
+	 * of an earlier order in the slot arriving late, and is not this order's.
+	 */
+	static int ownItemCollected(Offer o, int gone)
+	{
+		if (o == null || o.isEmpty() || gone <= 0)
+		{
+			return 0;
+		}
+		return "buy".equals(o.side()) || o.state.startsWith("CANCELLED") ? gone : 0;
+	}
+
 	private static boolean isTerminal(String state)
 	{
 		return state != null && (state.equals("BOUGHT") || state.equals("SOLD") || state.startsWith("CANCELLED"));

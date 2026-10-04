@@ -285,6 +285,19 @@ public class GeBridgePlugin extends Plugin
 	}
 
 	/**
+	 * When a slot's order leaves or a new one arrives, what was known of its collection box belongs to the old order:
+	 * the client can send the emptied box a while later, and it must not be read as a collection from the new order.
+	 */
+	private void forgetBoxOnNewOrder(int slot, Map<String, Object> ev)
+	{
+		final Object type = ev.get("type");
+		if ("cleared".equals(type) || "placed".equals(type) || "baseline".equals(type))
+		{
+			collectBoxes.remove(slot);
+		}
+	}
+
+	/**
 	 * Collection boxes: the client keeps one item container per GE slot holding what is waiting to be collected. It
 	 * grows as the offer fills or is aborted and shrinks only when the player collects, so a fall in an item's quantity
 	 * is a collection: of the order's item (bought units, or unsold units returned) or of coins. Contents are only sent
@@ -341,7 +354,7 @@ public class GeBridgePlugin extends Plugin
 			}
 			else if (canon == orderItem || b.getKey() == orderItem)
 			{
-				qty += gone;
+				qty += OfferTracker.ownItemCollected(o, gone);
 			}
 		}
 		if (items.isEmpty())
@@ -391,7 +404,12 @@ public class GeBridgePlugin extends Plugin
 					{
 						reconcileFixes++;
 					}
-					evs.forEach(this::emit);
+					final int slot = i;
+					evs.forEach(ev ->
+					{
+						forgetBoxOnNewOrder(slot, ev);
+						emit(ev);
+					});
 				}
 			}
 		}
@@ -409,6 +427,7 @@ public class GeBridgePlugin extends Plugin
 		{
 			for (Map<String, Object> ev : tracker.observe(slot, snap, now, burst))
 			{
+				forgetBoxOnNewOrder(slot, ev);
 				emit(ev);
 			}
 		});

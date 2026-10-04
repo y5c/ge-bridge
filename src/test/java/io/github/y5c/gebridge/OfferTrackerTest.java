@@ -185,4 +185,14 @@ public class OfferTrackerTest
 		assertEquals(0, t.get(0).collectedQty);                    // a new order starts from nothing
 		assertNull(t.collect(1, 3, 0, java.util.Collections.emptyList(), T0 + 6));   // nothing in that slot to own it
 	}
+	@Test
+	public void aLiveSellIsNotCreditedWithItsOwnItemComingOutOfTheBox()
+	{
+		// a cancelled ask returned its 154 scrolls; the emptied box reached the client after the item was re-listed
+		OfferTracker.Offer relisted = new OfferTracker.Offer(12786, "Magic shortbow scroll", "SELLING", 51_443, 154, 1, 51_443);
+		assertEquals(0, OfferTracker.ownItemCollected(relisted, 154));
+		relisted.state = "CANCELLED_SELL";
+		assertEquals(154, OfferTracker.ownItemCollected(relisted, 154));
+		assertEquals(6, OfferTracker.ownItemCollected(buy(10, 1_893_340), 6));
+	}
 }
