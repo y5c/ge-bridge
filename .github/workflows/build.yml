@@ -1,0 +1,22 @@
+name: build
+
+# Builds and tests against the newest RuneLite release every week, so an API change that breaks the plugin is
+# caught before the Plugin Hub disables it.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 12 * * 4"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "11"
+      - name: Build and test against the latest RuneLite release
+        run: ./gradlew build --refresh-dependencies --no-daemon
