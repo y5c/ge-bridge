@@ -69,7 +69,7 @@ tools written for it read this file too.
 | `timestamp`, `timestampIso` | when this file was written |
 | `rsn`, `accountHash`, `world`, `gameState`, `loggedIn`, `lastLogin`, `lastLogout` | the session |
 | `heartbeatSeconds`, `sections` | the save interval, and which optional sections are switched on |
-| `health` | since the plugin started: `eventsWritten`, `writeFailures`, `anomalies`, `reconcileFixes` (slots the login check corrected), `overflowed`, `pending` |
+| `health` | since the plugin started: `eventsWritten`, `writeFailures`, `readFailures` (potion storage or quest/diary data the client would not give), `anomalies`, `reconcileFixes` (slots the login check corrected), `overflowed`, `pending` |
 | `grandExchange.offers."0"…"7"` | each slot: `state`, `itemId`, `itemName`, `listedPrice`, `totalQuantity`, `completedQuantity`, `remainingQuantity`, `spent`, `placedAt`, `placedOffline`, `lastFillAt`, `observedAt` (times in epoch ms), `collectedQuantity`, `collectedCoins` |
 | `skills` | per skill: `level`, `boostedLevel`, `xp`; plus `combatLevel`, `totalLevel`, `totalXp` (optional) |
 | `inventory`, `equipment` | `items` by slot: `id`, `name`, `quantity`, `price`, `value` (optional) |
