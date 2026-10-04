@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
@@ -64,12 +65,21 @@ import net.runelite.client.util.Filepath;
 public class GeBridgePlugin extends Plugin
 {
 	static final int SCHEMA = 1;
-	static final String VERSION = "0.2.0";
+	static final String VERSION = "0.3.0-dev";
 	private static final long FLUSH_MIN_MS = 1_000;
 	// slots that got no event at login are read from the client this many ticks after it (RuneLite's own GE
 	// plugin sees the login burst end within 2 ticks; 10 leaves a wide margin before an EMPTY is believed)
 	private static final int RECONCILE_AFTER_TICKS = 10;
-	private static final int MAX_PENDING = 256;
+	// changes that arrive before the account's memory has loaded wait here; the cap only guards against a runaway.
+	// Anything over it is counted in health and reported by an "overflow" event, never dropped silently
+	private static final int MAX_PENDING = 4096;
+	// Experimental probe: the client keeps item containers per GE slot. Which of these is the collection box is not
+	// documented; recording their changes ("container" events) lets that be settled from real play.
+	private static final int[] GE_OFFER_INVS = {InventoryID.GE_OFFER_0, InventoryID.GE_OFFER_1, InventoryID.GE_OFFER_2,
+		InventoryID.GE_OFFER_3, InventoryID.GE_OFFER_4, InventoryID.GE_OFFER_5, InventoryID.GE_OFFER_6, InventoryID.GE_OFFER_7};
+	private static final int[] GE_COLLECT_INVS = {InventoryID.TRADINGPOST_SELL_0, InventoryID.TRADINGPOST_SELL_1,
+		InventoryID.TRADINGPOST_SELL_2, InventoryID.TRADINGPOST_SELL_3, InventoryID.TRADINGPOST_SELL_4,
+		InventoryID.TRADINGPOST_SELL_5, InventoryID.GE_COLLECT_6, InventoryID.GE_COLLECT_7};
 	// a GE change this many ticks after login is still the login burst: it happened while logged out
 	private static final int LOGIN_BURST_TICKS = 5;
 
@@ -111,6 +121,16 @@ public class GeBridgePlugin extends Plugin
 	private long bankSeenMs;
 	private Map<String, Object> levelsCache;
 	private boolean exiting;
+	private int pendingDropped;
+	private final Map<Integer, String> containerSeen = new java.util.HashMap<>();
+
+	// health counters since the plugin started (writeFailures is bumped on the io thread)
+	private long healthSince;
+	private long eventsWritten;
+	private long anomalies;
+	private long reconcileFixes;
+	private long overflowed;
+	private final AtomicLong writeFailures = new AtomicLong();
 
 	@Provides
 	GeBridgeConfig provideConfig(ConfigManager configManager)
@@ -122,6 +142,7 @@ public class GeBridgePlugin extends Plugin
 	protected void startUp()
 	{
 		io = Executors.newSingleThreadExecutor(r -> new Thread(r, "ge-bridge-io"));
+		healthSince = System.currentTimeMillis();
 		clientThread.invoke(() ->
 		{
 			if (client.getGameState() == GameState.LOGGED_IN)
@@ -169,6 +190,8 @@ public class GeBridgePlugin extends Plugin
 		exiting = false;
 		skillsCache = inventoryCache = equipmentCache = bankCache = null;
 		levelsCache = null;
+		pendingDropped = 0;
+		containerSeen.clear();
 	}
 
 	@Subscribe
@@ -255,6 +278,70 @@ public class GeBridgePlugin extends Plugin
 		{
 			dirty = true;
 		}
+		else
+		{
+			probeGeContainer(e.getContainerId(), e.getItemContainer());
+		}
+	}
+
+	private void probeGeContainer(int id, ItemContainer c)
+	{
+		String family = null;
+		int slot = -1;
+		for (int i = 0; i < OfferTracker.SLOTS; i++)
+		{
+			if (GE_OFFER_INVS[i] == id)
+			{
+				family = "offer";
+				slot = i;
+			}
+			else if (GE_COLLECT_INVS[i] == id)
+			{
+				family = "collect";
+				slot = i;
+			}
+		}
+		if (family == null)
+		{
+			return;
+		}
+		final List<Map<String, Object>> items = new ArrayList<>();
+		final Item[] all = c == null ? new Item[0] : c.getItems();
+		for (Item it : all)
+		{
+			if (it != null && it.getId() > 0 && it.getQuantity() > 0)
+			{
+				final Map<String, Object> m = new LinkedHashMap<>();
+				m.put("id", it.getId());
+				m.put("name", itemManager.getItemComposition(it.getId()).getName());
+				m.put("quantity", it.getQuantity());
+				items.add(m);
+			}
+		}
+		final String key = items.toString();
+		if (key.equals(containerSeen.put(id, key)))
+		{
+			return;
+		}
+		final long now = System.currentTimeMillis();
+		final Map<String, Object> ev = new LinkedHashMap<>();
+		ev.put("ts", OfferTracker.iso(now));
+		ev.put("t", now);
+		ev.put("type", "container");
+		ev.put("family", family);
+		ev.put("slot", slot);
+		ev.put("containerId", id);
+		ev.put("items", items);
+		final OfferTracker.Offer o = tracker == null ? null : tracker.get(slot);
+		if (o != null && !o.isEmpty())
+		{
+			// the offer in that slot when the container changed, so the two can be lined up
+			ev.put("offerItemId", o.itemId);
+			ev.put("offerSide", o.side());
+			ev.put("offerDone", o.done);
+			ev.put("offerTotal", o.total);
+		}
+		whenReady(() -> emit(ev));
 	}
 
 	@Subscribe
@@ -280,7 +367,13 @@ public class GeBridgePlugin extends Plugin
 			{
 				if (offers[i] != null && !tracker.seen(i))
 				{
-					observe(i, offers[i], now);
+					// a slot that got no event at login: whatever this finds is a change the login burst missed
+					final List<Map<String, Object>> evs = tracker.observe(i, snapshot(offers[i]), now, true);
+					if (!evs.isEmpty())
+					{
+						reconcileFixes++;
+					}
+					evs.forEach(this::emit);
 				}
 			}
 		}
@@ -323,6 +416,11 @@ public class GeBridgePlugin extends Plugin
 		if (pending.size() < MAX_PENDING)
 		{
 			pending.add(r);
+		}
+		else
+		{
+			pendingDropped++;
+			overflowed++;
 		}
 		ensureAccount();
 	}
@@ -409,6 +507,13 @@ public class GeBridgePlugin extends Plugin
 		final List<Runnable> run = new ArrayList<>(pending);
 		pending.clear();
 		run.forEach(Runnable::run);
+		if (pendingDropped > 0)
+		{
+			final Map<String, Object> ev = simple("overflow");
+			ev.put("dropped", pendingDropped);
+			emit(ev);
+			pendingDropped = 0;
+		}
 		dirty = true;
 	}
 
@@ -462,6 +567,11 @@ public class GeBridgePlugin extends Plugin
 			return;
 		}
 		final String line = gson.toJson(ev) + "\n";
+		eventsWritten++;
+		if ("anomaly".equals(ev.get("type")))
+		{
+			anomalies++;
+		}
 		final long maxBytes = config.maxLogMb() * 1024L * 1024L;
 		final long now = System.currentTimeMillis();
 		dirty = true;
@@ -473,6 +583,7 @@ public class GeBridgePlugin extends Plugin
 			}
 			catch (IOException ex)
 			{
+				writeFailures.incrementAndGet();
 				log.warn("ge-bridge: cannot append an event", ex);
 			}
 		});
@@ -503,6 +614,7 @@ public class GeBridgePlugin extends Plugin
 			}
 			catch (IOException ex)
 			{
+				writeFailures.incrementAndGet();
 				log.warn("ge-bridge: cannot write state.json", ex);
 			}
 		});
@@ -600,6 +712,15 @@ public class GeBridgePlugin extends Plugin
 		sections.addProperty("containers", config.writeContainers());
 		sections.addProperty("bank", config.writeBank());
 		s.add("sections", sections);
+		final JsonObject health = new JsonObject();
+		health.addProperty("since", OfferTracker.iso(healthSince));
+		health.addProperty("eventsWritten", eventsWritten);
+		health.addProperty("writeFailures", writeFailures.get());
+		health.addProperty("anomalies", anomalies);
+		health.addProperty("reconcileFixes", reconcileFixes);
+		health.addProperty("overflowed", overflowed);
+		health.addProperty("pending", pending.size());
+		s.add("health", health);
 		if (config.writeSkills())
 		{
 			if (levelsCache != null)
