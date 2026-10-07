@@ -513,7 +513,15 @@ public class GeBridgePlugin extends Plugin
 		{
 			writeState(now);
 		}
-		updateAdvice(now);
+		try
+		{
+			updateAdvice(now);
+		}
+		catch (RuntimeException ex)
+		{
+			view = AdviceView.NONE;
+			log.debug("ge-bridge: advice display failed", ex);
+		}
 	}
 
 	private void observe(int slot, GrandExchangeOffer offer, long now)
@@ -537,7 +545,15 @@ public class GeBridgePlugin extends Plugin
 				emit(ev);
 				if ("placed".equals(type) && ev.get("offline") == null)
 				{
-					checkPlaced(slot, snap, now);
+					try
+					{
+						checkPlaced(slot, snap, now);
+					}
+					catch (RuntimeException ex)
+					{
+						// the advice display must never cost an event: the rest of this batch still gets written
+						log.debug("ge-bridge: advice check failed", ex);
+					}
 				}
 			}
 		});
