@@ -3,6 +3,7 @@ package io.github.y5c.gebridge;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
+import net.runelite.client.config.ConfigSection;
 import net.runelite.client.config.Range;
 import net.runelite.client.config.Units;
 
@@ -78,5 +79,61 @@ public interface GeBridgeConfig extends Config
 	default int maxLogMb()
 	{
 		return 5;
+	}
+
+	@ConfigSection(
+		name = "Advice display",
+		description = "Shows advice.json, written into this plugin's data folder by your own tool, while the Grand Exchange is open",
+		position = 10
+	)
+	String adviceSection = "advice";
+
+	@ConfigItem(
+		keyName = "showAdvice",
+		name = "Show advice",
+		description = "While the Grand Exchange is open, show the advice from advice.json and check new offers against it",
+		position = 11,
+		section = adviceSection
+	)
+	default boolean showAdvice()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "highlightSlots",
+		name = "Highlight slots",
+		description = "Outline the slots the advice says to act on, and slots whose new order differs from the advice",
+		position = 12,
+		section = adviceSection
+	)
+	default boolean highlightSlots()
+	{
+		return true;
+	}
+
+	@Range(min = 1, max = 72)
+	@ConfigItem(
+		keyName = "adviceMaxAgeHours",
+		name = "Advice expiry (hours)",
+		description = "Older advice is not shown or checked: prices move",
+		position = 13,
+		section = adviceSection
+	)
+	default int adviceMaxAgeHours()
+	{
+		return 12;
+	}
+
+	@ConfigItem(
+		keyName = "personalMenu",
+		name = "Personal tag option",
+		description = "Add 'Mark personal' to a Grand Exchange slot's right-click menu; it writes a tag event to events.jsonl",
+		position = 14,
+		section = adviceSection
+	)
+	default boolean personalMenu()
+	{
+		return true;
 	}
 }

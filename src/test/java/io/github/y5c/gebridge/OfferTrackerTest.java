@@ -195,4 +195,22 @@ public class OfferTrackerTest
 		assertEquals(154, OfferTracker.ownItemCollected(relisted, 154));
 		assertEquals(6, OfferTracker.ownItemCollected(buy(10, 1_893_340), 6));
 	}
+
+	@Test
+	public void personalTagFollowsTheOrderUntilItLeaves()
+	{
+		OfferTracker t = remembering(buy(10, 1_893_340), T0 - 1_000);
+		t.observe(0, buy(10, 1_893_340), T0);
+		Map<String, Object> e = t.tag(0, true, T0 + 1);
+		assertEquals("tag", e.get("type"));
+		assertEquals(true, e.get("personal"));
+		assertEquals(189_334L, e.get("price"));
+		t.observe(0, buy(12, 2_272_008), T0 + 2);
+		assertTrue(t.get(0).personal);
+		assertEquals(true, ((Map<?, ?>) ((Map<?, ?>) t.toJson().get("offers")).get("0")).get("personal"));
+		t.observe(0, empty(), T0 + 3);
+		t.observe(0, buy(0, 0), T0 + 4);
+		assertTrue(!t.get(0).personal);
+		assertNull(t.tag(1, true, T0 + 5));
+	}
 }

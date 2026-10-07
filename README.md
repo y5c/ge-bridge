@@ -1,10 +1,12 @@
 # GE Bridge
 
 Writes your Grand Exchange offers, fills and account state to files on your own computer, so your own
-tools (spreadsheets, scripts, trade journals) can use them.
+tools (spreadsheets, scripts, trade journals) can use them, and shows those tools' advice in the Grand Exchange
+window.
 
 - **Local only.** It makes no network requests; nothing leaves your computer.
-- **Read-only.** It never places, changes, collects or cancels an offer, and it sends no input to the game.
+- **Read-only.** It never places, changes, collects or cancels an offer, and it sends no input to the game: it
+  never clicks and never types a price or quantity for you. The advice display only draws.
 - **Exact times.** Every offer change is written the moment the client sees it. Fills that happen while
   you are logged out (or trading on mobile) are written at your next login and marked as offline, with
   the window they happened in.
@@ -17,6 +19,7 @@ tools (spreadsheets, scripts, trade journals) can use them.
   events-<UTC time>.jsonl      older event logs (the newest six are kept)
   state.json                   the current snapshot
   account.json                 quest states and achievement diary completion
+  advice.json                  written by YOUR tool, never by the plugin: advice to show (optional)
 ```
 
 `<account id>` is RuneLite's numeric account hash, so several accounts on one computer each get their
@@ -42,8 +45,8 @@ moved so far).
 
 | type | when | extra fields |
 |---|---|---|
-| `placed` | a new offer appears in a slot | |
-| `fill` | the filled quantity goes up | `qty` (units in this fill), `gp` (gp moved in this fill) |
+| `placed` | a new offer appears in a slot | `market` (see below) |
+| `fill` | the filled quantity goes up | `qty` (units in this fill), `gp` (gp moved in this fill), `market` |
 | `completed` | the offer is fully bought or sold | |
 | `cancelled` | the offer is aborted | |
 | `cleared` | the offer leaves its slot (collected) | `unobserved: true` if it left without the plugin seeing it finish, so later fills may be missing |
@@ -51,9 +54,14 @@ moved so far).
 | `overflow` | changes queued before the account loaded exceeded the safety limit | `dropped` |
 | `decant` | potions of one kind swap for other dose sizes in one inventory change with the doses unchanged (Bob Barter's decanting, or combining by hand) | `potion`, `doses`, `from` and `to` (each `id`, `name`, `quantity`) |
 | `history` | the Grand Exchange trade history screen is open and its contents changed | `rows`: the screen's list as shown (`i`, and `itemId`/`itemName`/`quantity` for item icons, `text` for text), recorded unparsed |
+| `tag` | you chose "Mark personal" or "Unmark personal" on the slot's right-click menu | `personal` (true/false) |
 | `baseline` | first ever sight of a slot (no earlier memory): records what is there, implies no fill | |
 | `anomaly` | the filled quantity went down (should not happen) | `note` |
 | `login`, `logout`, `exit`, `start`, `stop` | session changes (`exit` = the client was closed while logged in) | `world`, `version` |
+
+`market`, on a `placed` or `fill` line written while you are logged in: the client's own price data for the item at
+that moment, `guide` (RuneLite's guide price) and `active` (its actively traded price). Both are averages the client
+refreshes now and then, not the live order book.
 
 Any offer line seen first at login, for a change made while you were away, also carries `offline: true`
 and `since`: the last time the slot was seen before that login. The change happened somewhere between
@@ -72,7 +80,7 @@ tools written for it read this file too.
 | `rsn`, `accountHash`, `world`, `gameState`, `loggedIn`, `lastLogin`, `lastLogout` | the session |
 | `heartbeatSeconds`, `sections` | the save interval, and which optional sections are switched on |
 | `health` | since the plugin started: `eventsWritten`, `writeFailures`, `readFailures` (potion storage or quest/diary data the client would not give), `anomalies`, `reconcileFixes` (slots the login check corrected), `overflowed`, `pending` |
-| `grandExchange.offers."0"…"7"` | each slot: `state`, `itemId`, `itemName`, `listedPrice`, `totalQuantity`, `completedQuantity`, `remainingQuantity`, `spent`, `placedAt`, `placedOffline`, `lastFillAt`, `observedAt` (times in epoch ms), `collectedQuantity`, `collectedCoins` |
+| `grandExchange.offers."0"…"7"` | each slot: `state`, `itemId`, `itemName`, `listedPrice`, `totalQuantity`, `completedQuantity`, `remainingQuantity`, `spent`, `placedAt`, `placedOffline`, `lastFillAt`, `observedAt` (times in epoch ms), `collectedQuantity`, `collectedCoins`, `personal` |
 | `skills` | per skill: `level`, `boostedLevel`, `xp`; plus `combatLevel`, `totalLevel`, `totalXp` (optional) |
 | `inventory`, `equipment` | `items` by slot: `id`, `name`, `quantity`, `price`, `value` (optional) |
 | `bank`, `bankLastSeenTimestamp`, `bankFromCache` | the bank as of the last time it was opened (optional) |
@@ -84,6 +92,30 @@ Written once your login has settled and refreshed about every ten minutes while 
 when something changed. `quests`: counts by state and `entries` per quest (`name`, `state`: `NOT_STARTED`,
 `IN_PROGRESS`, `FINISHED`). `achievementDiaries`: per region and tier (`easy` … `elite`) whether it is
 complete, from the game's own completion flags, plus totals. Same field names as the Local Data Exporter.
+
+## advice.json (optional, written by your tool)
+
+If your own tool writes `advice.json` into the account folder, GE Bridge shows it while the Grand Exchange is open: a
+panel listing what to do with each slot and which orders to place, and an outline on the slots to act on. The plugin
+never writes this file and never acts on it.
+
+```json
+{"schema": 1, "generatedAt": 1790000000000,
+ "slots":  [{"slot": 0, "itemId": 19484, "item": "Dragon javelin(p++)", "side": "sell", "price": 1331, "total": 1560,
+             "action": "trim", "text": "trim to 1,280"}],
+ "orders": [{"itemId": 19484, "item": "Dragon javelin(p++)", "side": "sell", "price": 1280, "qty": 1560, "why": "trim"}]}
+```
+
+- `generatedAt` (epoch ms) is required; advice older than the expiry setting is shown as out of date and not checked.
+- A `slots` entry is shown only while that same order (item, side, price, quantity) is still in the slot.
+  `action: "keep"` entries are counted, not listed.
+- An `orders` entry is listed until a slot holds that order. `qty` may be left out, and then the quantity is not checked.
+
+**Checks.** While you set up an offer, the panel compares the item, buy or sell, and the quantity with the advised
+orders, and warns about a wrong quantity, the wrong side, or an order that is already placed. The price you type is
+checked once the order is in its slot (the client keeps it where RuneLite cannot read it by name). A new order that
+differs from the advice for its item gets a red outline, a line in the panel and a chat message. Warnings never block
+or change anything: the Confirm button is untouched.
 
 `state.json` is also the plugin's memory between sessions. If you delete it, the next login starts again
 from `baseline` lines.
@@ -98,6 +130,10 @@ from `baseline` lines.
 | Write quests and diaries | on | account.json |
 | Save interval | 30 s | 10–300 s |
 | Event log size (MB) | 5 | 1–50; the size at which events.jsonl is archived |
+| Show advice | on | show advice.json while the Grand Exchange is open, and check new offers against it |
+| Highlight slots | on | outline the slots to act on, and slots whose new order differs from the advice |
+| Advice expiry (hours) | 12 | 1–72; older advice is shown as out of date |
+| Personal tag option | on | adds "Mark personal" to a slot's right-click menu (writes a `tag` event; nothing is sent to the game) |
 
 The Grand Exchange slots and the event log are always written; they are what the plugin is for.
 

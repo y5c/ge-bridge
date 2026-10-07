@@ -38,6 +38,8 @@ final class OfferTracker
 		// taken out of the collection box while this order was in the slot: the order's own item, and coins
 		int collectedQty;
 		long collectedCoins;
+		// the player marked this order as their own (not for their tools' accounting); follows the order until it leaves
+		boolean personal;
 
 		Offer(int itemId, String item, String state, long price, int total, int done, long spent)
 		{
@@ -197,6 +199,7 @@ final class OfferTracker
 		snap.lastFillAt = prev.lastFillAt;
 		snap.collectedQty = prev.collectedQty;
 		snap.collectedCoins = prev.collectedCoins;
+		snap.personal = prev.personal;
 		final int d = snap.done - prev.done;
 		if (d > 0)
 		{
@@ -234,6 +237,23 @@ final class OfferTracker
 		e.put("items", items);
 		e.put("collectedQty", o.collectedQty);
 		e.put("collectedCoins", o.collectedCoins);
+		return e;
+	}
+
+	/**
+	 * The player marks (or unmarks) the order in a slot as personal. Returns the {@code tag} event, or null when the slot
+	 * holds no order.
+	 */
+	Map<String, Object> tag(int slot, boolean personal, long now)
+	{
+		final Offer o = slot >= 0 && slot < SLOTS ? slots[slot] : null;
+		if (o == null || o.isEmpty())
+		{
+			return null;
+		}
+		o.personal = personal;
+		final Map<String, Object> e = event("tag", slot, o, now, false, null);
+		e.put("personal", personal);
 		return e;
 	}
 
@@ -342,6 +362,7 @@ final class OfferTracker
 				m.put("lastFillAt", o.lastFillAt);
 				m.put("collectedQuantity", o.collectedQty);
 				m.put("collectedCoins", o.collectedCoins);
+				m.put("personal", o.personal);
 			}
 			offers.put(Integer.toString(i), m);
 		}

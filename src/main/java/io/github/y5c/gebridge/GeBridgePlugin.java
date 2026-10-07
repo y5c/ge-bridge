@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.inject.Provides;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.StandardCopyOption;
@@ -16,8 +17,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
+import java.awt.Color;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.EnumComposition;
 import net.runelite.api.EnumID;
@@ -30,24 +33,34 @@ import net.runelite.api.GrandExchangeOfferState;
 import net.runelite.api.Item;
 import net.runelite.api.ItemComposition;
 import net.runelite.api.ItemContainer;
+import net.runelite.api.MenuAction;
+import net.runelite.api.MenuEntry;
 import net.runelite.api.Player;
 import net.runelite.api.Skill;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.GrandExchangeOfferChanged;
 import net.runelite.api.events.ItemContainerChanged;
+import net.runelite.api.events.MenuOpened;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
+import net.runelite.api.gameval.VarPlayerID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.chat.ChatMessageBuilder;
+import net.runelite.client.chat.ChatMessageManager;
+import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ClientShutdown;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.overlay.OverlayManager;
+import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.Filepath;
 
 /**
@@ -60,21 +73,24 @@ import net.runelite.client.util.Filepath;
  *   state.json     the current slots and, if enabled, inventory, equipment, bank (as last opened) and skills;
  *                  rewritten atomically on change and at the save interval while logged in; doubles as the
  *                  plugin's slot memory between sessions
+ *   advice.json    written by the player's own tool, never by the plugin: shown while the Grand Exchange is open
+ *                  (see {@link Advice})
  * </pre>
  *
- * Read-only: it never places, changes or collects an offer, and it makes no network requests.
+ * Read-only: it never places, changes or collects an offer, never enters text or clicks, and it makes no network
+ * requests. The advice display only draws.
  */
 @Slf4j
 @PluginDescriptor(
 	name = "GE Bridge",
 	internalName = "ge-bridge",
-	description = "Records Grand Exchange offer changes and account state to local files",
-	tags = {"grand exchange", "ge", "export", "flipping"}
+	description = "Records Grand Exchange offer changes and account state to local files, and shows your own tools' advice",
+	tags = {"grand exchange", "ge", "export", "flipping", "advice"}
 )
 public class GeBridgePlugin extends Plugin
 {
 	static final int SCHEMA = 1;
-	static final String VERSION = "0.5.0";
+	static final String VERSION = "0.6.0";
 	private static final long FLUSH_MIN_MS = 1_000;
 	// slots that got no event at login are read from the client this many ticks after it (RuneLite's own GE
 	// plugin sees the login burst end within 2 ticks; 10 leaves a wide margin before an EMPTY is believed)
@@ -91,6 +107,8 @@ public class GeBridgePlugin extends Plugin
 	// account.json: first written once the login has settled, then refreshed about every ten minutes while logged in
 	private static final int ACCOUNT_FIRST_TICKS = RECONCILE_AFTER_TICKS + 5;
 	private static final int ACCOUNT_EVERY_TICKS = 1000;
+	// advice.json is re-read this often while the Grand Exchange is open
+	private static final int ADVICE_EVERY_TICKS = 5;
 
 	@Inject
 	private Client client;
@@ -106,6 +124,18 @@ public class GeBridgePlugin extends Plugin
 
 	@Inject
 	private GeBridgeConfig config;
+
+	@Inject
+	private OverlayManager overlayManager;
+
+	@Inject
+	private AdviceOverlay adviceOverlay;
+
+	@Inject
+	private SlotOverlay slotOverlay;
+
+	@Inject
+	private ChatMessageManager chatMessageManager;
 
 	private ExecutorService io;
 
@@ -150,6 +180,14 @@ public class GeBridgePlugin extends Plugin
 	private JsonElement potionCache;
 	private long potionSeenMs;
 
+	private Advice advice;
+	private String adviceText;
+	private int adviceTick = -1;
+	private boolean geOpen;
+	// slot -> how the order just placed there differs from the advice; cleared when the slot's order changes
+	private final Map<Integer, String> mismatches = new HashMap<>();
+	private volatile AdviceView view = AdviceView.NONE;
+
 	@Provides
 	GeBridgeConfig provideConfig(ConfigManager configManager)
 	{
@@ -161,6 +199,8 @@ public class GeBridgePlugin extends Plugin
 	{
 		io = Executors.newSingleThreadExecutor(r -> new Thread(r, "ge-bridge-io"));
 		healthSince = System.currentTimeMillis();
+		overlayManager.add(adviceOverlay);
+		overlayManager.add(slotOverlay);
 		clientThread.invoke(() ->
 		{
 			if (client.getGameState() == GameState.LOGGED_IN)
@@ -182,6 +222,8 @@ public class GeBridgePlugin extends Plugin
 		// it does not block either, but it lets the already-queued writes (that final save included) finish instead
 		// of discarding them, so the slot memory on disk is never older than the session.
 		final ExecutorService ex = io;
+		overlayManager.remove(adviceOverlay);
+		overlayManager.remove(slotOverlay);
 		clientThread.invoke(() ->
 		{
 			if (tracker != null && accountDir != null)
@@ -216,6 +258,12 @@ public class GeBridgePlugin extends Plugin
 		lastHistory = null;
 		potionsStale = false;
 		potionCache = null;
+		advice = null;
+		adviceText = null;
+		adviceTick = -1;
+		geOpen = false;
+		mismatches.clear();
+		view = AdviceView.NONE;
 	}
 
 	@Subscribe
@@ -465,6 +513,7 @@ public class GeBridgePlugin extends Plugin
 		{
 			writeState(now);
 		}
+		updateAdvice(now);
 	}
 
 	private void observe(int slot, GrandExchangeOffer offer, long now)
@@ -476,9 +525,42 @@ public class GeBridgePlugin extends Plugin
 			for (Map<String, Object> ev : tracker.observe(slot, snap, now, burst))
 			{
 				forgetBoxOnNewOrder(slot, ev);
+				final Object type = ev.get("type");
+				if (("placed".equals(type) || "fill".equals(type)) && ev.get("offline") == null)
+				{
+					ev.put("market", market(snap.itemId));
+				}
+				if ("cleared".equals(type) || "placed".equals(type) || "baseline".equals(type))
+				{
+					mismatches.remove(slot);
+				}
 				emit(ev);
+				if ("placed".equals(type) && ev.get("offline") == null)
+				{
+					checkPlaced(slot, snap, now);
+				}
 			}
 		});
+	}
+
+	/**
+	 * The client's own price data for an item when an order is placed or fills: RuneLite's guide price and its actively
+	 * traded price. Both are averages the client refreshes now and then, not the live book.
+	 */
+	private Map<String, Object> market(int itemId)
+	{
+		final Map<String, Object> m = new LinkedHashMap<>();
+		try
+		{
+			m.put("guide", itemManager.getItemPrice(itemId));
+			m.put("active", itemManager.getItemPriceWithSource(itemId, true));
+		}
+		catch (RuntimeException ex)
+		{
+			readFailures++;
+			log.debug("ge-bridge: no price for {}", itemId, ex);
+		}
+		return m;
 	}
 
 	private OfferTracker.Offer snapshot(GrandExchangeOffer o)
@@ -619,6 +701,7 @@ public class GeBridgePlugin extends Plugin
 		o.lastFillAt = num(m, "lastFillAt", null);
 		o.collectedQty = num(m, "collectedQuantity", 0).intValue();
 		o.collectedCoins = num(m, "collectedCoins", 0);
+		o.personal = m.has("personal") && !m.get("personal").isJsonNull() && m.get("personal").getAsBoolean();
 		final Long seen = num(m, "observedAt", null);
 		o.observedAt = seen == null ? 0 : seen;
 		return o;
@@ -1096,5 +1179,226 @@ public class GeBridgePlugin extends Plugin
 		}
 		s.add("grandExchange", gson.toJsonTree(tracker.toJson()));
 		return s;
+	}
+
+	// ------------------------------------------------------------------ advice display
+
+	AdviceView adviceView()
+	{
+		return view;
+	}
+
+	private boolean isGeOpen()
+	{
+		final Widget w = client.getWidget(InterfaceID.GeOffers.UNIVERSE);
+		return w != null && !w.isHidden();
+	}
+
+	/** Each tick: re-read advice.json now and then while the Grand Exchange is open, and rebuild what the overlays draw. */
+	private void updateAdvice(long now)
+	{
+		final boolean open = loggedIn && isGeOpen();
+		if (open && accountDir != null && config.showAdvice()
+			&& (!geOpen || adviceTick < 0 || client.getTickCount() - adviceTick >= ADVICE_EVERY_TICKS))
+		{
+			adviceTick = client.getTickCount();
+			loadAdvice();
+		}
+		geOpen = open;
+		view = open && config.showAdvice() ? buildView(now) : AdviceView.NONE;
+	}
+
+	private void loadAdvice()
+	{
+		final Filepath dir = accountDir;
+		io.submit(() ->
+		{
+			String text = null;
+			try
+			{
+				final Filepath f = dir.joinSegment("advice.json");
+				text = f.exists() ? new String(readAll(f), StandardCharsets.UTF_8) : null;
+			}
+			catch (IOException ex)
+			{
+				log.debug("ge-bridge: advice.json unreadable", ex);
+			}
+			final String t = text;
+			clientThread.invoke(() -> applyAdvice(dir, t));
+		});
+	}
+
+	private void applyAdvice(Filepath dir, String text)
+	{
+		if (dir != accountDir || (text != null && text.equals(adviceText)))
+		{
+			return;
+		}
+		adviceText = text;
+		advice = null;
+		if (text == null)
+		{
+			return;
+		}
+		try
+		{
+			final Advice a = gson.fromJson(text, Advice.class);
+			advice = a != null && a.usable() ? a : null;
+		}
+		catch (JsonParseException ex)
+		{
+			readFailures++;
+			log.debug("ge-bridge: advice.json is not valid", ex);
+		}
+	}
+
+	/** The advice, if it is loaded and young enough to show. */
+	private Advice freshAdvice(long now)
+	{
+		return advice != null && now - advice.generatedAt <= config.adviceMaxAgeHours() * 3_600_000L ? advice : null;
+	}
+
+	private OfferTracker.Offer[] offersNow()
+	{
+		final OfferTracker.Offer[] out = new OfferTracker.Offer[OfferTracker.SLOTS];
+		for (int i = 0; tracker != null && i < OfferTracker.SLOTS; i++)
+		{
+			out[i] = tracker.get(i);
+		}
+		return out;
+	}
+
+	/** An order just placed that differs from the advice for its item: flag the slot and say so in the chat box. */
+	private void checkPlaced(int slot, OfferTracker.Offer o, long now)
+	{
+		final Advice a = config.showAdvice() ? freshAdvice(now) : null;
+		final String diff = a == null ? null : a.placedMismatch(o);
+		if (diff == null)
+		{
+			return;
+		}
+		mismatches.put(slot, diff);
+		chatMessageManager.queue(QueuedMessage.builder()
+			.type(ChatMessageType.GAMEMESSAGE)
+			.runeLiteFormattedMessage(new ChatMessageBuilder()
+				.append(ColorUtil.wrapWithColorTag("GE Bridge: slot " + slot + " differs from the advice: " + diff, AdviceView.WARN))
+				.build())
+			.build());
+	}
+
+	private AdviceView buildView(long now)
+	{
+		if (tracker == null || advice == null)
+		{
+			return AdviceView.NONE;
+		}
+		final long age = now - advice.generatedAt;
+		final String header = "GE Bridge advice (" + Advice.age(age) + " old)";
+		final List<AdviceView.Line> lines = new ArrayList<>();
+		final Map<Integer, Color> slots = new LinkedHashMap<>();
+		if (freshAdvice(now) == null)
+		{
+			lines.add(new AdviceView.Line("Out of date: run your tool again", null, AdviceView.DIM));
+			return new AdviceView(header, AdviceView.DIM, lines, slots);
+		}
+		final OfferTracker.Offer[] offers = offersNow();
+		final int selected = client.getVarbitValue(VarbitID.GE_SELECTEDSLOT) - 1;
+		final Widget setup = client.getWidget(InterfaceID.GeOffers.SETUP);
+		final int item = client.getVarpValue(VarPlayerID.TRADINGPOST_SEARCH);
+		final boolean setupOpen = selected >= 0 && selected < OfferTracker.SLOTS && setup != null && !setup.isHidden()
+			&& (offers[selected] == null || offers[selected].isEmpty());
+		if (setupOpen && item > 0)
+		{
+			final String side = client.getVarbitValue(VarbitID.GE_NEWOFFER_TYPE) == 1 ? "sell" : "buy";
+			final Advice.Check c = advice.check(itemManager.canonicalize(item), side, client.getVarbitValue(VarbitID.GE_NEWOFFER_QUANTITY), offers);
+			final Color color = "ok".equals(c.level) ? AdviceView.OK : "warn".equals(c.level) ? AdviceView.WARN : AdviceView.DIM;
+			for (String l : c.lines)
+			{
+				lines.add(new AdviceView.Line(l, null, color));
+			}
+			return new AdviceView(header, AdviceView.TEXT, lines, slots);
+		}
+		for (Map.Entry<Integer, String> m : mismatches.entrySet())
+		{
+			lines.add(new AdviceView.Line("Slot " + m.getKey() + ": " + m.getValue(), null, AdviceView.WARN));
+			slots.put(m.getKey(), AdviceView.WARN);
+		}
+		int keep = 0;
+		for (int i = 0; i < OfferTracker.SLOTS; i++)
+		{
+			final Advice.Slot a = advice.forSlot(i, offers[i]);
+			if (a == null || offers[i].personal)
+			{
+				continue;
+			}
+			if ("keep".equals(a.action))
+			{
+				keep++;
+				continue;
+			}
+			lines.add(new AdviceView.Line(i + " " + a.item, a.text, AdviceView.ACT));
+			slots.putIfAbsent(i, AdviceView.ACT);
+		}
+		for (Advice.Order o : advice.open(offers))
+		{
+			lines.add(new AdviceView.Line(o.side + " " + (o.qty == null ? "" : Advice.fmt(o.qty) + " ") + o.item, Advice.fmt(o.price), AdviceView.TEXT));
+		}
+		if (keep > 0)
+		{
+			lines.add(new AdviceView.Line(keep + (keep == 1 ? " slot" : " slots") + ": keep", null, AdviceView.DIM));
+		}
+		if (lines.isEmpty())
+		{
+			lines.add(new AdviceView.Line("Nothing to do", null, AdviceView.DIM));
+		}
+		return new AdviceView(header, AdviceView.TEXT, lines, config.highlightSlots() ? slots : new LinkedHashMap<>());
+	}
+
+	/** "Mark personal" on a Grand Exchange slot's right-click menu. Client-side only: it writes a tag event. */
+	@Subscribe
+	public void onMenuOpened(MenuOpened e)
+	{
+		if (!config.personalMenu() || tracker == null || !geOpen)
+		{
+			return;
+		}
+		for (MenuEntry me : e.getMenuEntries())
+		{
+			final Widget w = me.getWidget();
+			for (int slot = 0; w != null && slot < OfferTracker.SLOTS; slot++)
+			{
+				final OfferTracker.Offer o = tracker.get(slot);
+				if (w.getId() != SlotOverlay.SLOT_WIDGETS[slot] || o == null || o.isEmpty())
+				{
+					continue;
+				}
+				final int s = slot;
+				final boolean mark = !o.personal;
+				// index 1: just above Cancel, never the left-click option
+				client.getMenu().createMenuEntry(1)
+					.setOption(mark ? "Mark personal" : "Unmark personal")
+					.setTarget(ColorUtil.wrapWithColorTag(o.item, AdviceView.ACT))
+					.setType(MenuAction.RUNELITE)
+					.onClick(x -> togglePersonal(s, mark));
+				return;
+			}
+		}
+	}
+
+	private void togglePersonal(int slot, boolean personal)
+	{
+		if (tracker == null)
+		{
+			return;
+		}
+		final Map<String, Object> ev = tracker.tag(slot, personal, System.currentTimeMillis());
+		if (ev != null)
+		{
+			if (personal)
+			{
+				mismatches.remove(slot);
+			}
+			emit(ev);
+		}
 	}
 }
