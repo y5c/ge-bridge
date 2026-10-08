@@ -62,6 +62,7 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.Filepath;
+import net.runelite.client.util.Text;
 
 /**
  * GE Bridge: writes the account's Grand Exchange activity and state to local files, for the player's own tools.
@@ -90,7 +91,7 @@ import net.runelite.client.util.Filepath;
 public class GeBridgePlugin extends Plugin
 {
 	static final int SCHEMA = 1;
-	static final String VERSION = "0.6.0";
+	static final String VERSION = "0.6.1";
 	private static final long FLUSH_MIN_MS = 1_000;
 	// slots that got no event at login are read from the client this many ticks after it (RuneLite's own GE
 	// plugin sees the login burst end within 2 ticks; 10 leaves a wide margin before an EMPTY is believed)
@@ -1296,10 +1297,19 @@ public class GeBridgePlugin extends Plugin
 		mismatches.put(slot, diff);
 		chatMessageManager.queue(QueuedMessage.builder()
 			.type(ChatMessageType.GAMEMESSAGE)
-			.runeLiteFormattedMessage(new ChatMessageBuilder()
-				.append(ColorUtil.wrapWithColorTag("GE Bridge: slot " + slot + " differs from the advice: " + diff, AdviceView.WARN))
-				.build())
+			.runeLiteFormattedMessage(warning(slot, diff))
 			.build());
+	}
+
+	/**
+	 * The chat line for a placed order that differs from the advice. The colour goes in through the builder's colour
+	 * method: its plain append escapes tags, which printed them as text (0.6.0).
+	 */
+	static String warning(int slot, String diff)
+	{
+		return new ChatMessageBuilder()
+			.append(AdviceView.WARN, Text.escapeJagex("GE Bridge: slot " + slot + " differs from the advice: " + diff))
+			.build();
 	}
 
 	private AdviceView buildView(long now)
