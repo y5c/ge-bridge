@@ -118,4 +118,19 @@ public class AdviceTest
 		assertEquals("3h", Advice.age(3 * 3_600_000 + 59 * 60_000));
 		assertEquals("3d", Advice.age(3 * 86_400_000L));
 	}
+
+	@Test
+	public void anOrderThatCarriesOutASlotsAdviceIsListedOnceThatSlotChanges()
+	{
+		final Advice a = new Gson().fromJson("{\"schema\":1,\"generatedAt\":1,"
+			+ "\"slots\":[{\"slot\":0,\"itemId\":19484,\"item\":\"Dragon javelin(p++)\",\"side\":\"sell\",\"price\":1331,\"total\":1560,\"action\":\"trim\",\"text\":\"trim to 1,280\"}],"
+			+ "\"orders\":[{\"itemId\":19484,\"item\":\"Dragon javelin(p++)\",\"side\":\"sell\",\"price\":1280,\"qty\":1560,\"why\":\"trim\",\"slot\":0},"
+			+ "{\"itemId\":3140,\"item\":\"Dragon chainbody\",\"side\":\"buy\",\"price\":177255,\"qty\":40,\"why\":\"pick\"}]}", Advice.class);
+		// the old ask is still up: its slot line says "trim to 1,280", so only the new pick is listed
+		assertEquals(1, a.toPlace(slots(offer(JAVELIN, "Dragon javelin(p++)", "SELLING", 1331, 1560))).size());
+		// cancelled: the slot line is gone and the re-listing becomes something to place
+		assertEquals(2, a.toPlace(slots()).size());
+		// re-listed at the advised price: placed, nothing left but the pick
+		assertEquals(1, a.toPlace(slots(offer(JAVELIN, "Dragon javelin(p++)", "SELLING", 1280, 1560))).size());
+	}
 }

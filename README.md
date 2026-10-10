@@ -103,13 +103,16 @@ never writes this file and never acts on it.
 {"schema": 1, "generatedAt": 1790000000000,
  "slots":  [{"slot": 0, "itemId": 19484, "item": "Dragon javelin(p++)", "side": "sell", "price": 1331, "total": 1560,
              "action": "trim", "text": "trim to 1,280"}],
- "orders": [{"itemId": 19484, "item": "Dragon javelin(p++)", "side": "sell", "price": 1280, "qty": 1560, "why": "trim"}]}
+ "orders": [{"itemId": 19484, "item": "Dragon javelin(p++)", "side": "sell", "price": 1280, "qty": 1560, "why": "trim",
+             "slot": 0}]}
 ```
 
 - `generatedAt` (epoch ms) is required; advice older than the expiry setting is shown as out of date and not checked.
 - A `slots` entry is shown only while that same order (item, side, price, quantity) is still in the slot.
   `action: "keep"` entries are counted, not listed.
 - An `orders` entry is listed until a slot holds that order. `qty` may be left out, and then the quantity is not checked.
+  `slot` (optional) names the slot whose advice the order carries out (a trim, a listing): the order is then not listed
+  while that slot's line still shows, so a trim appears once, as "trim to 1,280" on its slot.
 
 **Checks.** While you set up an offer, the panel compares the item, buy or sell, and the quantity with the advised
 orders, and warns about a wrong quantity, the wrong side, or an order that is already placed. The price you type is
@@ -153,6 +156,7 @@ Needs Java 11.
 ```
 ./gradlew test
 ./gradlew run      # RuneLite in developer mode with the plugin loaded
+./gradlew preview -Pargs="advice.json|state.json|panel.png"   # draw the advice panel to a PNG, no client needed
 ```
 
 ## License

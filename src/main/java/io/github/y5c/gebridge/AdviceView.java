@@ -1,7 +1,9 @@
 package io.github.y5c.gebridge;
 
 import java.awt.Color;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -42,5 +44,74 @@ final class AdviceView
 		this.headerColor = headerColor;
 		this.lines = lines;
 		this.slots = slots;
+	}
+
+	/**
+	 * What to draw. Pure, so the panel can be rendered and checked outside the game.
+	 *
+	 * @param offers     the eight slots as the plugin last saw them
+	 * @param mismatches slot -> how the order just placed there differs from the advice
+	 * @param check      the offer screen's check, or null when no new offer is being set up
+	 * @param maxAgeMs   older advice is shown as out of date and not used
+	 */
+	static AdviceView build(Advice advice, OfferTracker.Offer[] offers, Map<Integer, String> mismatches, Advice.Check check,
+		long now, long maxAgeMs, boolean highlight)
+	{
+		if (advice == null)
+		{
+			return NONE;
+		}
+		final long age = now - advice.generatedAt;
+		final String header = "GE Bridge advice (" + Advice.age(age) + " old)";
+		final List<Line> lines = new ArrayList<>();
+		final Map<Integer, Color> slots = new LinkedHashMap<>();
+		if (age > maxAgeMs)
+		{
+			lines.add(new Line("Out of date: run your tool again", null, DIM));
+			return new AdviceView(header, DIM, lines, slots);
+		}
+		if (check != null)
+		{
+			final Color color = "ok".equals(check.level) ? OK : "warn".equals(check.level) ? WARN : DIM;
+			for (String l : check.lines)
+			{
+				lines.add(new Line(l, null, color));
+			}
+			return new AdviceView(header, TEXT, lines, slots);
+		}
+		for (Map.Entry<Integer, String> m : mismatches.entrySet())
+		{
+			lines.add(new Line("Slot " + m.getKey() + ": " + m.getValue(), null, WARN));
+			slots.put(m.getKey(), WARN);
+		}
+		int keep = 0;
+		for (int i = 0; i < OfferTracker.SLOTS; i++)
+		{
+			final Advice.Slot a = advice.forSlot(i, offers[i]);
+			if (a == null || offers[i].personal)
+			{
+				continue;
+			}
+			if ("keep".equals(a.action))
+			{
+				keep++;
+				continue;
+			}
+			lines.add(new Line(i + " " + a.item, a.text, ACT));
+			slots.putIfAbsent(i, ACT);
+		}
+		for (Advice.Order o : advice.toPlace(offers))
+		{
+			lines.add(new Line(o.side + " " + (o.qty == null ? "" : Advice.fmt(o.qty) + " ") + o.item, Advice.fmt(o.price), TEXT));
+		}
+		if (keep > 0)
+		{
+			lines.add(new Line(keep + (keep == 1 ? " slot" : " slots") + ": keep", null, DIM));
+		}
+		if (lines.isEmpty())
+		{
+			lines.add(new Line("Nothing to do", null, DIM));
+		}
+		return new AdviceView(header, TEXT, lines, highlight ? slots : new LinkedHashMap<>());
 	}
 }

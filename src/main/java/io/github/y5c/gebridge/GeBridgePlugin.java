@@ -17,7 +17,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
-import java.awt.Color;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
@@ -91,7 +90,7 @@ import net.runelite.client.util.Text;
 public class GeBridgePlugin extends Plugin
 {
 	static final int SCHEMA = 1;
-	static final String VERSION = "0.6.1";
+	static final String VERSION = "0.6.2";
 	private static final long FLUSH_MIN_MS = 1_000;
 	// slots that got no event at login are read from the client this many ticks after it (RuneLite's own GE
 	// plugin sees the login burst end within 2 ticks; 10 leaves a wide margin before an EMPTY is believed)
@@ -707,7 +706,7 @@ public class GeBridgePlugin extends Plugin
 		dirty = true;
 	}
 
-	private static OfferTracker.Offer offerFromJson(JsonObject m)
+	static OfferTracker.Offer offerFromJson(JsonObject m)
 	{
 		final String state = str(m, "state");
 		final OfferTracker.Offer o = new OfferTracker.Offer(num(m, "itemId", 0).intValue(), str(m, "itemName"), state,
@@ -1318,66 +1317,21 @@ public class GeBridgePlugin extends Plugin
 		{
 			return AdviceView.NONE;
 		}
-		final long age = now - advice.generatedAt;
-		final String header = "GE Bridge advice (" + Advice.age(age) + " old)";
-		final List<AdviceView.Line> lines = new ArrayList<>();
-		final Map<Integer, Color> slots = new LinkedHashMap<>();
-		if (freshAdvice(now) == null)
-		{
-			lines.add(new AdviceView.Line("Out of date: run your tool again", null, AdviceView.DIM));
-			return new AdviceView(header, AdviceView.DIM, lines, slots);
-		}
 		final OfferTracker.Offer[] offers = offersNow();
-		final int selected = client.getVarbitValue(VarbitID.GE_SELECTEDSLOT) - 1;
-		final Widget setup = client.getWidget(InterfaceID.GeOffers.SETUP);
-		final int item = client.getVarpValue(VarPlayerID.TRADINGPOST_SEARCH);
-		final boolean setupOpen = selected >= 0 && selected < OfferTracker.SLOTS && setup != null && !setup.isHidden()
-			&& (offers[selected] == null || offers[selected].isEmpty());
-		if (setupOpen && item > 0)
+		Advice.Check check = null;
+		if (freshAdvice(now) != null)
 		{
-			final String side = client.getVarbitValue(VarbitID.GE_NEWOFFER_TYPE) == 1 ? "sell" : "buy";
-			final Advice.Check c = advice.check(itemManager.canonicalize(item), side, client.getVarbitValue(VarbitID.GE_NEWOFFER_QUANTITY), offers);
-			final Color color = "ok".equals(c.level) ? AdviceView.OK : "warn".equals(c.level) ? AdviceView.WARN : AdviceView.DIM;
-			for (String l : c.lines)
+			final int selected = client.getVarbitValue(VarbitID.GE_SELECTEDSLOT) - 1;
+			final Widget setup = client.getWidget(InterfaceID.GeOffers.SETUP);
+			final int item = client.getVarpValue(VarPlayerID.TRADINGPOST_SEARCH);
+			if (selected >= 0 && selected < OfferTracker.SLOTS && setup != null && !setup.isHidden()
+				&& (offers[selected] == null || offers[selected].isEmpty()) && item > 0)
 			{
-				lines.add(new AdviceView.Line(l, null, color));
+				final String side = client.getVarbitValue(VarbitID.GE_NEWOFFER_TYPE) == 1 ? "sell" : "buy";
+				check = advice.check(itemManager.canonicalize(item), side, client.getVarbitValue(VarbitID.GE_NEWOFFER_QUANTITY), offers);
 			}
-			return new AdviceView(header, AdviceView.TEXT, lines, slots);
 		}
-		for (Map.Entry<Integer, String> m : mismatches.entrySet())
-		{
-			lines.add(new AdviceView.Line("Slot " + m.getKey() + ": " + m.getValue(), null, AdviceView.WARN));
-			slots.put(m.getKey(), AdviceView.WARN);
-		}
-		int keep = 0;
-		for (int i = 0; i < OfferTracker.SLOTS; i++)
-		{
-			final Advice.Slot a = advice.forSlot(i, offers[i]);
-			if (a == null || offers[i].personal)
-			{
-				continue;
-			}
-			if ("keep".equals(a.action))
-			{
-				keep++;
-				continue;
-			}
-			lines.add(new AdviceView.Line(i + " " + a.item, a.text, AdviceView.ACT));
-			slots.putIfAbsent(i, AdviceView.ACT);
-		}
-		for (Advice.Order o : advice.open(offers))
-		{
-			lines.add(new AdviceView.Line(o.side + " " + (o.qty == null ? "" : Advice.fmt(o.qty) + " ") + o.item, Advice.fmt(o.price), AdviceView.TEXT));
-		}
-		if (keep > 0)
-		{
-			lines.add(new AdviceView.Line(keep + (keep == 1 ? " slot" : " slots") + ": keep", null, AdviceView.DIM));
-		}
-		if (lines.isEmpty())
-		{
-			lines.add(new AdviceView.Line("Nothing to do", null, AdviceView.DIM));
-		}
-		return new AdviceView(header, AdviceView.TEXT, lines, config.highlightSlots() ? slots : new LinkedHashMap<>());
+		return AdviceView.build(advice, offers, mismatches, check, now, config.adviceMaxAgeHours() * 3_600_000L, config.highlightSlots());
 	}
 
 	/** "Mark personal" on a Grand Exchange slot's right-click menu. Client-side only: it writes a tag event. */

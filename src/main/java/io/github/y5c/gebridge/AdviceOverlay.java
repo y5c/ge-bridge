@@ -6,6 +6,7 @@ import javax.inject.Inject;
 import net.runelite.client.ui.overlay.OverlayPanel;
 import net.runelite.client.ui.overlay.OverlayPosition;
 import net.runelite.client.ui.overlay.components.LineComponent;
+import net.runelite.client.ui.overlay.components.PanelComponent;
 import net.runelite.client.ui.overlay.components.TitleComponent;
 
 /** A panel listing the advice while the Grand Exchange is open. Display only. */
@@ -31,15 +32,21 @@ final class AdviceOverlay extends OverlayPanel
 		{
 			return null;
 		}
-		panelComponent.setPreferredSize(new Dimension(WIDTH, 0));
-		panelComponent.getChildren().add(TitleComponent.builder().text(v.header).color(v.headerColor).build());
+		fill(panelComponent, v);
+		return super.render(g);
+	}
+
+	/** The panel's contents; also used to render the panel outside the game. */
+	static void fill(PanelComponent panel, AdviceView v)
+	{
+		panel.setPreferredSize(new Dimension(WIDTH, 0));
+		panel.getChildren().add(TitleComponent.builder().text(v.header).color(v.headerColor).build());
 		for (AdviceView.Line l : v.lines)
 		{
-			panelComponent.getChildren().add(LineComponent.builder()
+			panel.getChildren().add(LineComponent.builder()
 				.left(l.left).leftColor(l.color)
 				.right(l.right == null ? "" : l.right).rightColor(l.color)
 				.build());
 		}
-		return super.render(g);
 	}
 }

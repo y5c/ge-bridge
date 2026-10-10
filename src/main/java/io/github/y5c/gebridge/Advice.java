@@ -12,11 +12,12 @@ import java.util.Locale;
  * <pre>
  * {"schema": 1, "generatedAt": epoch ms,
  *  "slots":  [{"slot", "itemId", "item", "side", "price", "total", "action", "text"}],   advice for the order now in a slot
- *  "orders": [{"itemId", "item", "side", "price", "qty", "why"}]}                       orders the player should place
+ *  "orders": [{"itemId", "item", "side", "price", "qty", "why", "slot"}]}               orders the player should place
  * </pre>
  *
  * A slot entry applies only while that same order (item, side, price, quantity) is still in the slot. An order counts
- * as placed once a slot holds it. {@code qty} may be absent, in which case the quantity is not checked.
+ * as placed once a slot holds it. {@code qty} may be absent, in which case the quantity is not checked. {@code slot}
+ * (optional) names the slot whose advice the order carries out; the order is not listed while that advice shows.
  *
  * <p>Pure: no client types. Fields are filled by Gson.
  */
@@ -44,6 +45,8 @@ final class Advice
 		long price;
 		Integer qty;
 		String why;
+		// the slot whose advice this order carries out (a trim, a re-place, a listing), when there is one
+		Integer slot;
 	}
 
 	/** What the offer screen shows against the advice: {@code level} is ok, warn or none (no advice for the item). */
@@ -120,6 +123,24 @@ final class Advice
 			{
 				out.add(a);
 			}
+		}
+		return out;
+	}
+
+	/**
+	 * The orders to list under "place": the open ones, less those that carry out the advice of a slot still showing
+	 * it. A trim reads "trim to 49,726" on its slot; it is listed as an order only once that slot has changed.
+	 */
+	List<Order> toPlace(OfferTracker.Offer[] now)
+	{
+		final List<Order> out = new ArrayList<>();
+		for (Order a : open(now))
+		{
+			if (a.slot != null && a.slot >= 0 && a.slot < now.length && forSlot(a.slot, now[a.slot]) != null)
+			{
+				continue;
+			}
+			out.add(a);
 		}
 		return out;
 	}

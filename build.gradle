@@ -67,3 +67,10 @@ tasks.register('shadowJar', Jar) {
 	archiveClassifier.set('shadow')
 	archiveFileName.set("${rootProject.name}-${project.version}-all.jar")
 }
+
+// Developer tool: render the advice panel to a PNG outside the game (see AdvicePreview)
+tasks.register('preview', JavaExec) {
+	classpath = sourceSets.test.runtimeClasspath
+	mainClass = 'io.github.y5c.gebridge.AdvicePreview'
+	args = project.hasProperty('args') ? project.property('args').tokenize('|') : []
+}
