@@ -15,7 +15,7 @@ public interface GeBridgeConfig extends Config
 	@ConfigItem(
 		keyName = "writeBank",
 		name = "Write bank",
-		description = "Include the bank and its potion storage (as of the last time the bank was opened) in state.json",
+		description = "Include the bank and its potion storage (as of the last time the bank was opened), the rune pouch, and the seed vault (as of the last time it was opened) in state.json",
 		position = 1
 	)
 	default boolean writeBank()

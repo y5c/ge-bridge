@@ -79,12 +79,14 @@ tools written for it read this file too.
 | `timestamp`, `timestampIso` | when this file was written |
 | `rsn`, `accountHash`, `world`, `gameState`, `loggedIn`, `lastLogin`, `lastLogout` | the session |
 | `heartbeatSeconds`, `sections` | the save interval, and which optional sections are switched on |
-| `health` | since the plugin started: `eventsWritten`, `writeFailures`, `readFailures` (potion storage or quest/diary data the client would not give), `anomalies`, `reconcileFixes` (slots the login check corrected), `overflowed`, `pending` |
+| `health` | since the plugin started: `eventsWritten`, `writeFailures`, `readFailures` (potion storage, rune pouch or quest/diary data the client would not give), `anomalies`, `reconcileFixes` (slots the login check corrected), `overflowed`, `pending` |
 | `grandExchange.offers."0"…"7"` | each slot: `state`, `itemId`, `itemName`, `listedPrice`, `totalQuantity`, `completedQuantity`, `remainingQuantity`, `spent`, `placedAt`, `placedOffline`, `lastFillAt`, `observedAt` (times in epoch ms), `collectedQuantity`, `collectedCoins`, `personal` |
 | `skills` | per skill: `level`, `boostedLevel`, `xp`; plus `combatLevel`, `totalLevel`, `totalXp` (optional) |
 | `inventory`, `equipment` | `items` by slot: `id`, `name`, `quantity`, `price`, `value` (optional) |
 | `bank`, `bankLastSeenTimestamp`, `bankFromCache` | the bank as of the last time it was opened (optional) |
 | `potionStore`, `potionStoreLastSeenTimestamp` | the bank's potion storage, which is not part of the bank container: per potion `id`, `name`, `doses`, `withdrawDoses`, `pricePerDose`, `value` (with the bank setting) |
+| `runePouch`, `runePouchLastSeenTimestamp` | the rune pouch, read from the game's pouch variables after login and whenever they change (whether or not the pouch is carried): per slot `id`, `name`, `quantity`, `price`, `value` — up to six slots for the divine rune pouch (0.6.4, with the bank setting) |
+| `seedVault`, `seedVaultLastSeenTimestamp` | the Farming Guild seed vault, as last seen: its contents reach the client only while the vault is open, so this is the last opening's view (0.6.4, with the bank setting) |
 
 ## account.json
 
@@ -131,7 +133,7 @@ from `baseline` lines.
 
 | setting | default | |
 |---|---|---|
-| Write bank | on | include the bank and its potion storage in state.json |
+| Write bank | on | include the bank, its potion storage, the rune pouch and the seed vault in state.json |
 | Write skills | on | include skills and levels |
 | Write inventory and equipment | on | |
 | Write quests and diaries | on | account.json |

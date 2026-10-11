@@ -42,6 +42,7 @@ import net.runelite.api.events.GrandExchangeOfferChanged;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.MenuOpened;
 import net.runelite.api.events.StatChanged;
+import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.VarPlayerID;
@@ -90,7 +91,7 @@ import net.runelite.client.util.Text;
 public class GeBridgePlugin extends Plugin
 {
 	static final int SCHEMA = 1;
-	static final String VERSION = "0.6.3";
+	static final String VERSION = "0.6.4";
 	private static final long FLUSH_MIN_MS = 1_000;
 	// slots that got no event at login are read from the client this many ticks after it (RuneLite's own GE
 	// plugin sees the login burst end within 2 ticks; 10 leaves a wide margin before an EMPTY is believed)
@@ -179,6 +180,12 @@ public class GeBridgePlugin extends Plugin
 	private boolean potionsStale;
 	private JsonElement potionCache;
 	private long potionSeenMs;
+	// 0.6.4: the rune pouch (from its varbits, any time) and the seed vault (when it is opened), each with when it was read
+	private boolean pouchStale;
+	private JsonElement pouchCache;
+	private long pouchSeenMs;
+	private JsonElement seedVaultCache;
+	private long seedVaultSeenMs;
 
 	private Advice advice;
 	private String adviceText;
@@ -258,6 +265,9 @@ public class GeBridgePlugin extends Plugin
 		lastHistory = null;
 		potionsStale = false;
 		potionCache = null;
+		pouchStale = false;
+		pouchCache = seedVaultCache = null;
+		pouchSeenMs = seedVaultSeenMs = 0;
 		advice = null;
 		adviceText = null;
 		adviceTick = -1;
@@ -305,6 +315,7 @@ public class GeBridgePlugin extends Plugin
 			reconciled = false;
 			accountTick = -1;
 			lastLogin = OfferTracker.iso(now);
+			pouchStale = true;        // the pouch varbits arrive with the login; read once they have
 			whenReady(() -> emit(simple("login")));
 		}
 		else if ((s == GameState.LOGIN_SCREEN || s == GameState.LOGIN_SCREEN_AUTHENTICATOR) && loggedIn)
@@ -358,9 +369,25 @@ public class GeBridgePlugin extends Plugin
 		{
 			dirty = true;
 		}
+		else if (e.getContainerId() == InventoryID.SEED_VAULT)
+		{
+			// the vault's contents reach the client only while it is open: keep the last sight, with its time
+			seedVaultCache = container(e.getItemContainer(), false);
+			seedVaultSeenMs = System.currentTimeMillis();
+			dirty = true;
+		}
 		else
 		{
 			onCollectionBox(e.getContainerId(), e.getItemContainer());
+		}
+	}
+
+	@Subscribe
+	public void onVarbitChanged(VarbitChanged e)
+	{
+		if (Stores.isPouchVarbit(e.getVarbitId()))
+		{
+			pouchStale = true;        // read on the next tick: several pouch varbits change together
 		}
 	}
 
@@ -502,6 +529,11 @@ public class GeBridgePlugin extends Plugin
 			potionsStale = false;
 			readPotionStore(now);
 		}
+		if (pouchStale && loggedIn)
+		{
+			pouchStale = false;
+			readRunePouch(now);
+		}
 		final int sinceLogin = client.getTickCount() - loginTick;
 		if (loggedIn && config.writeAccount() && sinceLogin >= ACCOUNT_FIRST_TICKS
 			&& (accountTick < 0 || client.getTickCount() - accountTick >= ACCOUNT_EVERY_TICKS))
@@ -620,6 +652,9 @@ public class GeBridgePlugin extends Plugin
 		tracker = null;
 		accountDir = null;
 		bankCache = null;
+		// another account's stores must not be written into this one's state.json if its own has none yet
+		potionCache = pouchCache = seedVaultCache = null;
+		potionSeenMs = pouchSeenMs = seedVaultSeenMs = 0;
 		io.submit(() ->
 		{
 			try
@@ -676,6 +711,16 @@ public class GeBridgePlugin extends Plugin
 					potionCache = prev.get("potionStore");
 					potionSeenMs = prev.has("potionStoreLastSeenTimestamp") && !prev.get("potionStoreLastSeenTimestamp").isJsonNull()
 						? prev.get("potionStoreLastSeenTimestamp").getAsLong() : 0;
+				}
+				if (prev.has("runePouch") && prev.get("runePouch").isJsonObject())
+				{
+					pouchCache = prev.get("runePouch");
+					pouchSeenMs = longOr(prev, "runePouchLastSeenTimestamp");
+				}
+				if (prev.has("seedVault") && prev.get("seedVault").isJsonObject())
+				{
+					seedVaultCache = prev.get("seedVault");
+					seedVaultSeenMs = longOr(prev, "seedVaultLastSeenTimestamp");
 				}
 				skillsCache = prev.get("skills");
 				inventoryCache = prev.get("inventory");
@@ -1007,6 +1052,30 @@ public class GeBridgePlugin extends Plugin
 		}
 	}
 
+	/** The rune pouch, from the game's pouch varbits and its rune enum (as RuneLite's rune pouch overlay reads them). */
+	private void readRunePouch(long now)
+	{
+		try
+		{
+			final EnumComposition runes = client.getEnum(EnumID.RUNEPOUCH_RUNE);
+			pouchCache = Stores.runePouch(client::getVarbitValue, runes::getIntValue,
+				id -> itemManager.getItemComposition(id).getName(), id -> itemManager.getItemPrice(id));
+			pouchSeenMs = now;
+			dirty = true;
+		}
+		catch (RuntimeException ex)
+		{
+			// a change to the pouch varbits or enum must never stop the GE log
+			readFailures++;
+			log.debug("ge-bridge: rune pouch unreadable", ex);
+		}
+	}
+
+	private static long longOr(JsonObject o, String key)
+	{
+		return o.has(key) && !o.get(key).isJsonNull() ? o.get(key).getAsLong() : 0;
+	}
+
 	/** account.json: quest states and diary completion, rewritten only when they change. */
 	private void writeAccount(long now)
 	{
@@ -1192,6 +1261,10 @@ public class GeBridgePlugin extends Plugin
 			s.add("bank", bankCache);
 			s.add("potionStore", potionCache);
 			s.addProperty("potionStoreLastSeenTimestamp", potionSeenMs > 0 ? potionSeenMs : null);
+			s.add("runePouch", pouchCache);
+			s.addProperty("runePouchLastSeenTimestamp", pouchSeenMs > 0 ? pouchSeenMs : null);
+			s.add("seedVault", seedVaultCache);
+			s.addProperty("seedVaultLastSeenTimestamp", seedVaultSeenMs > 0 ? seedVaultSeenMs : null);
 		}
 		s.add("grandExchange", gson.toJsonTree(tracker.toJson()));
 		return s;
