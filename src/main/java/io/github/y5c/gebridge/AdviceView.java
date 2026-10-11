@@ -87,8 +87,20 @@ final class AdviceView
 		int keep = 0;
 		for (int i = 0; i < OfferTracker.SLOTS; i++)
 		{
-			final Advice.Slot a = advice.forSlot(i, offers[i]);
-			if (a == null || offers[i].personal)
+			final OfferTracker.Offer o = offers[i];
+			if (o != null && !o.personal && "BOUGHT".equals(o.state))
+			{
+				// a buy that finished since the check-in: say where to list it now, not at the next check-in (0.6.3)
+				final Long at = advice.listAt(i, o);
+				if (at != null)
+				{
+					lines.add(new Line(i + " " + o.item, "collect, list at " + Advice.fmt(at), ACT));
+					slots.putIfAbsent(i, ACT);
+					continue;
+				}
+			}
+			final Advice.Slot a = advice.forSlot(i, o);
+			if (a == null || o.personal)
 			{
 				continue;
 			}

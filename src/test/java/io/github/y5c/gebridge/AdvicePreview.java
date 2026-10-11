@@ -57,6 +57,7 @@ public class AdvicePreview
 			}
 		}
 		long now = advice.generatedAt + 60_000;
+		String style = "current";
 		Advice.Check check = null;
 		final Map<Integer, String> mismatches = new HashMap<>();
 		for (int a = 3; a < args.length; a++)
@@ -71,6 +72,17 @@ public class AdvicePreview
 					mismatches.put(Integer.parseInt(args[a + 1]), args[a + 2]);
 					a += 2;
 					break;
+				case "--bought":      // that slot's buy has completed since the check-in
+				{
+					final OfferTracker.Offer o = offers[Integer.parseInt(args[a + 1])];
+					offers[Integer.parseInt(args[a + 1])] = new OfferTracker.Offer(o.itemId, o.item, "BOUGHT", o.price, o.total, o.total, o.price * o.total);
+					a += 1;
+					break;
+				}
+				case "--style":       // layout options under trial: current, grouped, compact
+					style = args[a + 1];
+					a += 1;
+					break;
 				case "--age-min":
 					now = advice.generatedAt + Long.parseLong(args[a + 1]) * 60_000;
 					a += 1;
@@ -79,7 +91,7 @@ public class AdvicePreview
 					throw new IllegalArgumentException(args[a]);
 			}
 		}
-		final AdviceView v = AdviceView.build(advice, offers, mismatches, check, now, 12 * 3_600_000L, true);
+		final AdviceView v = restyle(AdviceView.build(advice, offers, mismatches, check, now, 12 * 3_600_000L, true), style);
 		if (v.header == null)
 		{
 			System.out.println("nothing to show (no usable advice)");
@@ -109,6 +121,61 @@ public class AdvicePreview
 		}
 		System.out.println("wrote " + out + " (" + img.getWidth() + "x" + img.getHeight() + ", " + v.lines.size() + " lines, "
 			+ v.slots.size() + " outlined slots)");
+	}
+
+	/** Layout options for the panel, applied to the plugin's own view so only the arrangement differs. */
+	static AdviceView restyle(AdviceView v, String style)
+	{
+		if (v.header == null || "current".equals(style))
+		{
+			return v;
+		}
+		final java.util.List<AdviceView.Line> act = new java.util.ArrayList<>(), place = new java.util.ArrayList<>(), rest = new java.util.ArrayList<>();
+		for (AdviceView.Line l : v.lines)
+		{
+			(l.color == AdviceView.ACT || l.color == AdviceView.WARN ? act : l.color == AdviceView.TEXT ? place : rest).add(l);
+		}
+		final java.util.List<AdviceView.Line> out = new java.util.ArrayList<>();
+		if ("grouped".equals(style))
+		{
+			if (!act.isEmpty())
+			{
+				out.add(new AdviceView.Line("Do now", null, AdviceView.DIM));
+				out.addAll(act);
+			}
+			if (!place.isEmpty())
+			{
+				out.add(new AdviceView.Line("Place", null, AdviceView.DIM));
+				out.addAll(place);
+			}
+			out.addAll(rest);
+			return new AdviceView(v.header, v.headerColor, out, v.slots);
+		}
+		if ("compact".equals(style))
+		{
+			for (AdviceView.Line l : act)
+			{
+				final String r = l.right == null ? "" : l.right.replace("collect, list at ", "list ").replace("trim to ", "trim ")
+					.replace("re-place at ", "bid ").replace("sell at ", "sell ");
+				out.add(new AdviceView.Line(shorten(l.left, 20), r, l.color));
+			}
+			for (AdviceView.Line l : place)
+			{
+				// "buy 2,038 Bagged plant 1" -> "+ Bagged plant 1" | "2,038 @ 2,078"
+				final String[] w = l.left.split(" ", 3);
+				final boolean qty = w.length == 3 && w[1].matches("[0-9,]+");
+				out.add(new AdviceView.Line((w[0].equals("buy") ? "+ " : "- ") + shorten(qty ? w[2] : l.left.substring(w[0].length() + 1), 18),
+					(qty ? w[1] + " @ " : "@ ") + l.right, l.color));
+			}
+			out.addAll(rest);
+			return new AdviceView(v.header.replace("GE Bridge advice", "Advice"), v.headerColor, out, v.slots);
+		}
+		throw new IllegalArgumentException("style " + style);
+	}
+
+	private static String shorten(String s, int n)
+	{
+		return s.length() <= n ? s : s.substring(0, n - 1) + "…";
 	}
 
 	private static Graphics2D prepare(Graphics2D g)

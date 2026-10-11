@@ -133,4 +133,24 @@ public class AdviceTest
 		// re-listed at the advised price: placed, nothing left but the pick
 		assertEquals(1, a.toPlace(slots(offer(JAVELIN, "Dragon javelin(p++)", "SELLING", 1280, 1560))).size());
 	}
+
+	@Test
+	public void aCompletedBuySaysWhereToListIt()
+	{
+		final Advice a = new Gson().fromJson("{\"schema\":1,\"generatedAt\":1,"
+			+ "\"slots\":[{\"slot\":0,\"itemId\":8431,\"item\":\"Bagged plant 1\",\"side\":\"buy\",\"price\":2078,\"total\":2038,\"action\":\"keep\",\"text\":\"keep\",\"listAt\":2290}],"
+			+ "\"orders\":[{\"itemId\":3140,\"item\":\"Dragon chainbody\",\"side\":\"buy\",\"price\":177255,\"qty\":40,\"why\":\"pick\",\"listLater\":188341}]}", Advice.class);
+		final OfferTracker.Offer bought = new OfferTracker.Offer(8431, "Bagged plant 1", "BOUGHT", 2078, 2038, 2038, 0);
+		final OfferTracker.Offer pick = new OfferTracker.Offer(CHAINBODY, "Dragon chainbody", "BOUGHT", 177255, 40, 40, 0);
+		final OfferTracker.Offer buying = new OfferTracker.Offer(8431, "Bagged plant 1", "BUYING", 2078, 2038, 5, 0);
+		assertEquals(Long.valueOf(2290), a.listAt(0, bought));          // from the slot's advice
+		assertEquals(Long.valueOf(188341), a.listAt(3, pick));          // a pick placed since the check-in
+		final AdviceView v = AdviceView.build(a, slots(bought, null, null, pick), new java.util.HashMap<>(), null, 2, 3_600_000L, true);
+		assertEquals("collect, list at 2,290", v.lines.get(0).right);
+		assertEquals("collect, list at 188,341", v.lines.get(1).right);
+		assertEquals(2, v.slots.size());
+		// still buying: the usual keep count, no list line yet
+		final AdviceView w = AdviceView.build(a, slots(buying), new java.util.HashMap<>(), null, 2, 3_600_000L, true);
+		assertEquals("1 slot: keep", w.lines.get(w.lines.size() - 1).left);
+	}
 }

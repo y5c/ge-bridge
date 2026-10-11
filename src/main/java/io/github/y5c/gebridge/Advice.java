@@ -35,6 +35,8 @@ final class Advice
 		int total;
 		String action;
 		String text;
+		// a bid: the price to list at once it completes (0.6.3)
+		Long listAt;
 	}
 
 	static final class Order
@@ -47,6 +49,8 @@ final class Advice
 		String why;
 		// the slot whose advice this order carries out (a trim, a re-place, a listing), when there is one
 		Integer slot;
+		// a bid: the price to list at once it completes (0.6.3)
+		Long listLater;
 	}
 
 	/** What the offer screen shows against the advice: {@code level} is ok, warn or none (no advice for the item). */
@@ -243,6 +247,31 @@ final class Advice
 			diff.add("quantity " + fmt(o.total) + " (advised " + fmt(near.qty) + ")");
 		}
 		return o.item + ": " + String.join(", ", diff);
+	}
+
+	/**
+	 * The price to list a completed buy at: from the advice for its slot, else from the advised order it is (a pick placed
+	 * since the check-in). Null when the advice gives none.
+	 */
+	Long listAt(int slot, OfferTracker.Offer o)
+	{
+		if (o == null || o.isEmpty() || !"buy".equals(o.side()))
+		{
+			return null;
+		}
+		final Slot s = forSlot(slot, o);
+		if (s != null && s.listAt != null)
+		{
+			return s.listAt;
+		}
+		for (Order a : orders())
+		{
+			if (a.listLater != null && matches(a, o))
+			{
+				return a.listLater;
+			}
+		}
+		return null;
 	}
 
 	static boolean matches(Order a, OfferTracker.Offer o)
