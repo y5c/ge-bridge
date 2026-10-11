@@ -244,9 +244,9 @@ final class Advice
 		}
 		if (near.qty != null && near.qty != o.total)
 		{
-			diff.add("quantity " + fmt(o.total) + " (advised " + fmt(near.qty) + ")");
+			diff.add("qty " + fmt(o.total) + " (advised " + fmt(near.qty) + ")");
 		}
-		return o.item + ": " + String.join(", ", diff);
+		return AdviceView.shorten(o.item, AdviceView.SLOT_NAME) + ": " + String.join(", ", diff);
 	}
 
 	/**

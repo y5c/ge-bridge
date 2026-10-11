@@ -46,6 +46,34 @@ final class AdviceView
 		this.slots = slots;
 	}
 
+	// the compact layout (user's pick, 2026-10-11): names cut to fit one line, actions in a word or two
+	static final int SLOT_NAME = 20;
+	static final int ORDER_NAME = 18;
+
+	/**
+	 * A name cut to at most {@code n} characters, keeping its last three: "Divine battlemag…(4)". The ending is what tells
+	 * an item's doses, charges or tiers apart, so it is never the part dropped.
+	 */
+	static String shorten(String s, int n)
+	{
+		if (s == null || s.length() <= n || n < 6)
+		{
+			return s;
+		}
+		return s.substring(0, n - 4).trim() + "…" + s.substring(s.length() - 3);
+	}
+
+	/** The advice's action in a word or two: "trim to 1,280" -> "trim 1,280". */
+	static String compact(String text)
+	{
+		if (text == null)
+		{
+			return "";
+		}
+		return text.replace("collect, list at ", "list ").replace("trim to ", "trim ").replace("re-place at ", "bid ")
+			.replace("sell at ", "sell ").replace("cancel, list ", "cancel; list ").replace(" at ", " @ ");
+	}
+
 	/**
 	 * What to draw. Pure, so the panel can be rendered and checked outside the game.
 	 *
@@ -62,7 +90,7 @@ final class AdviceView
 			return NONE;
 		}
 		final long age = now - advice.generatedAt;
-		final String header = "GE Bridge advice (" + Advice.age(age) + " old)";
+		final String header = "Advice (" + Advice.age(age) + " old)";
 		final List<Line> lines = new ArrayList<>();
 		final Map<Integer, Color> slots = new LinkedHashMap<>();
 		if (age > maxAgeMs)
@@ -81,7 +109,7 @@ final class AdviceView
 		}
 		for (Map.Entry<Integer, String> m : mismatches.entrySet())
 		{
-			lines.add(new Line("Slot " + m.getKey() + ": " + m.getValue(), null, WARN));
+			lines.add(new Line(m.getKey() + " " + m.getValue(), null, WARN));
 			slots.put(m.getKey(), WARN);
 		}
 		int keep = 0;
@@ -94,7 +122,7 @@ final class AdviceView
 				final Long at = advice.listAt(i, o);
 				if (at != null)
 				{
-					lines.add(new Line(i + " " + o.item, "collect, list at " + Advice.fmt(at), ACT));
+					lines.add(new Line(i + " " + shorten(o.item, SLOT_NAME), "list " + Advice.fmt(at), ACT));
 					slots.putIfAbsent(i, ACT);
 					continue;
 				}
@@ -109,12 +137,13 @@ final class AdviceView
 				keep++;
 				continue;
 			}
-			lines.add(new Line(i + " " + a.item, a.text, ACT));
+			lines.add(new Line(i + " " + shorten(a.item, SLOT_NAME), compact(a.text), ACT));
 			slots.putIfAbsent(i, ACT);
 		}
 		for (Advice.Order o : advice.toPlace(offers))
 		{
-			lines.add(new Line(o.side + " " + (o.qty == null ? "" : Advice.fmt(o.qty) + " ") + o.item, Advice.fmt(o.price), TEXT));
+			lines.add(new Line(("buy".equals(o.side) ? "+ " : "- ") + shorten(o.item, ORDER_NAME),
+				(o.qty == null ? "" : Advice.fmt(o.qty) + " ") + "@ " + Advice.fmt(o.price), TEXT));
 		}
 		if (keep > 0)
 		{

@@ -96,7 +96,9 @@ complete, from the game's own completion flags, plus totals. Same field names as
 ## advice.json (optional, written by your tool)
 
 If your own tool writes `advice.json` into the account folder, GE Bridge shows it while the Grand Exchange is open: a
-panel listing what to do with each slot and which orders to place, and an outline on the slots to act on. The plugin
+compact panel listing what to do with each slot ("2 Divine battlemag…(4) — trim 19,092") and which orders to place
+("+ Toktz-ket-xil — 24 @ 297,901"), and an outline on the slots to act on. Long item names are cut to fit one line but
+always keep their last three characters, so doses, charges and tiers stay readable. The plugin
 never writes this file and never acts on it.
 
 ```json

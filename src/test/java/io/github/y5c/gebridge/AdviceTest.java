@@ -103,7 +103,7 @@ public class AdviceTest
 	{
 		final Advice a = advice();
 		assertNull(a.placedMismatch(offer(BATTLEMAGE, "Battlemage potion(4)", "BUYING", 289, 283)));
-		assertEquals("Battlemage potion(4): price 14,000 (advised 289), quantity 386 (advised 283)",
+		assertEquals("Battlemage potion(4): price 14,000 (advised 289), qty 386 (advised 283)",
 			a.placedMismatch(offer(BATTLEMAGE, "Battlemage potion(4)", "BUYING", 14000, 386)));
 		assertNull(a.placedMismatch(offer(4151, "Abyssal whip", "BUYING", 1, 1)));            // no advice: nothing to say
 		assertNull(a.placedMismatch(offer(BATTLEMAGE, "Battlemage potion(4)", "SELLING", 1, 1)));  // advice is for the other side
@@ -146,11 +146,23 @@ public class AdviceTest
 		assertEquals(Long.valueOf(2290), a.listAt(0, bought));          // from the slot's advice
 		assertEquals(Long.valueOf(188341), a.listAt(3, pick));          // a pick placed since the check-in
 		final AdviceView v = AdviceView.build(a, slots(bought, null, null, pick), new java.util.HashMap<>(), null, 2, 3_600_000L, true);
-		assertEquals("collect, list at 2,290", v.lines.get(0).right);
-		assertEquals("collect, list at 188,341", v.lines.get(1).right);
+		assertEquals("list 2,290", v.lines.get(0).right);
+		assertEquals("list 188,341", v.lines.get(1).right);
 		assertEquals(2, v.slots.size());
 		// still buying: the usual keep count, no list line yet
 		final AdviceView w = AdviceView.build(a, slots(buying), new java.util.HashMap<>(), null, 2, 3_600_000L, true);
 		assertEquals("1 slot: keep", w.lines.get(w.lines.size() - 1).left);
+	}
+
+	@Test
+	public void compactNamesKeepTheirLastThreeCharacters()
+	{
+		assertEquals("Divine battlemag…(4)", AdviceView.shorten("Divine battlemage potion(4)", AdviceView.SLOT_NAME));
+		assertEquals("Divine super s…(4)", AdviceView.shorten("Divine super strength potion(4)", AdviceView.ORDER_NAME));
+		assertEquals("Bagged plant 1", AdviceView.shorten("Bagged plant 1", AdviceView.SLOT_NAME));
+		assertEquals(20, AdviceView.shorten("Super combat potion(2) and more", 20).length());
+		assertEquals("trim 1,280", AdviceView.compact("trim to 1,280"));
+		assertEquals("cancel; list 13 @ 52,208", AdviceView.compact("cancel, list 13 at 52,208"));
+		assertEquals("bid 6,248", AdviceView.compact("re-place at 6,248"));
 	}
 }
