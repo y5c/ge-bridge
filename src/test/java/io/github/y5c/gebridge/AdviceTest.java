@@ -71,6 +71,38 @@ public class AdviceTest
 	}
 
 	@Test
+	public void anOrderSeenPlacedStaysOffTheListOnceCollected()
+	{
+		// 2026-10-12: a sell to the standing buyers filled and was collected within seconds; with its slot empty again the
+		// panel listed it as still to place
+		final Advice a = advice();
+		final OfferTracker.Offer trim = offer(JAVELIN, "Dragon javelin(p++)", "SELLING", 1280, 1560);
+		a.markPlaced(trim);
+		assertEquals(2, a.open(slots()).size());
+		assertEquals(2, a.toPlace(slots()).size());
+		// an offer that matches no advised order marks nothing
+		a.markPlaced(offer(JAVELIN, "Dragon javelin(p++)", "SELLING", 1275, 1560));
+		a.markPlaced(offer(0, null, "EMPTY", 0, 0));
+		assertEquals(2, a.open(slots()).size());
+		// a freshly loaded file starts with nothing seen
+		assertEquals(3, advice().open(slots()).size());
+	}
+
+	@Test
+	public void twoEqualOrdersNeedTwoPlacements()
+	{
+		final String json = "{\"schema\":1,\"generatedAt\":5,\"orders\":["
+			+ "{\"itemId\":3140,\"item\":\"Dragon chainbody\",\"side\":\"buy\",\"price\":177255,\"qty\":20,\"why\":\"split\"},"
+			+ "{\"itemId\":3140,\"item\":\"Dragon chainbody\",\"side\":\"buy\",\"price\":177255,\"qty\":20,\"why\":\"split\"}]}";
+		final Advice a = new Gson().fromJson(json, Advice.class);
+		final OfferTracker.Offer half = offer(CHAINBODY, "Dragon chainbody", "BUYING", 177255, 20);
+		a.markPlaced(half);
+		assertEquals(1, a.open(slots()).size());
+		a.markPlaced(half);
+		assertEquals(0, a.open(slots()).size());
+	}
+
+	@Test
 	public void offerScreenCatchesAWrongQuantity()
 	{
 		// the slip this was built for: 386 typed where 283 was advised

@@ -2,8 +2,10 @@ package io.github.y5c.gebridge;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * advice.json: what the player's own tool advises for the Grand Exchange, written by that tool into the plugin's data
@@ -70,6 +72,10 @@ final class Advice
 	long generatedAt;
 	List<Slot> slots;
 	List<Order> orders;
+	// orders seen placed since this advice loaded, kept even once their slot is empty again: a sell to the standing
+	// buyers fills and is collected in seconds, and its slot never shows it to a later check (0.6.5). Transient: not
+	// read from the file; a new advice file starts empty.
+	private transient Set<Order> placed;
 
 	boolean usable()
 	{
@@ -117,13 +123,42 @@ final class Advice
 		return -1;
 	}
 
-	/** Advised orders no slot holds yet. */
+	/**
+	 * An order has just been placed: remember the advised order it carries out, so the order stays off the list after
+	 * it completes and is collected. One advised order per placement, the first not already seen.
+	 */
+	void markPlaced(OfferTracker.Offer o)
+	{
+		if (o == null || o.isEmpty())
+		{
+			return;
+		}
+		if (placed == null)
+		{
+			placed = new HashSet<>();
+		}
+		for (Order a : orders())
+		{
+			if (!placed.contains(a) && matches(a, o))
+			{
+				placed.add(a);
+				return;
+			}
+		}
+	}
+
+	private boolean seenPlaced(Order a)
+	{
+		return placed != null && placed.contains(a);
+	}
+
+	/** Advised orders no slot holds yet and not seen placed. */
 	List<Order> open(OfferTracker.Offer[] now)
 	{
 		final List<Order> out = new ArrayList<>();
 		for (Order a : orders())
 		{
-			if (placedIn(a, now) < 0)
+			if (!seenPlaced(a) && placedIn(a, now) < 0)
 			{
 				out.add(a);
 			}
