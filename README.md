@@ -118,7 +118,8 @@ place it, even if it fills and you collect it at once. The plugin never writes t
   `slot` (optional) names the slot whose advice the order carries out (a trim, a listing): the order is then not listed
   while that slot's line still shows, so a trim appears once, as "trim to 1,280" on its slot.
 - For a bid, `listAt` (on its `slots` entry) or `listLater` (on its `orders` entry) is the price to list its units at once
-  it completes: the panel then reads "collect, list at N" as soon as the buy finishes.
+  it completes: the panel then reads "collect, list at N" as soon as the buy finishes, and setting up the sale of that
+  item later reads "sell N @ P", even after the bought units have been collected.
 
 **Checks.** While you set up an offer, the panel compares the item, buy or sell, and the quantity with the advised
 orders, and warns about a wrong quantity, the wrong side, or an order that is already placed. The price you type is

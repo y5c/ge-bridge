@@ -210,6 +210,19 @@ final class Advice
 		}
 		if (same.isEmpty())
 		{
+			// a completed, collected bid: its advice to sell is the buy order's list price (0.6.6; nihil dust 2026-10-13
+			// read "Advice is to buy this item, not sell")
+			if (other != null && "sell".equals(side) && "buy".equals(other.side) && other.listLater != null)
+			{
+				// the item is already chosen on the offer screen: quantity and price only, on one line
+				lines.add("sell " + (other.qty == null ? "" : fmt(other.qty) + " ") + "@ " + fmt(other.listLater) + " (cost " + fmt(other.price) + ")");
+				if (other.qty != null && qty > other.qty)
+				{
+					lines.add("Quantity " + fmt(qty) + " is more than the " + fmt(other.qty) + " advised");
+					return new Check("warn", lines);
+				}
+				return new Check("ok", lines);
+			}
 			if (other != null)
 			{
 				lines.add("Advice is to " + other.side + " this item, not " + side);

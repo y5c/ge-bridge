@@ -103,6 +103,23 @@ public class AdviceTest
 	}
 
 	@Test
+	public void sellingABidThatCarriesAListPriceIsAdvised()
+	{
+		// 2026-10-13: the nihil dust bid completed and was collected; setting up the sale read "Advice is to buy this item"
+		final Advice a = new Gson().fromJson("{\"schema\":1,\"generatedAt\":5,\"orders\":[{\"itemId\":26368,\"item\":\"Nihil dust\","
+			+ "\"side\":\"buy\",\"price\":2886,\"qty\":1316,\"why\":\"pick\",\"listLater\":3345}]}", Advice.class);
+		final Advice.Check ok = a.check(26368, "sell", 1316, slots());
+		assertEquals("ok", ok.level);
+		assertTrue(String.join("|", ok.lines).contains("sell 1,316 @ 3,345 (cost 2,886)"));
+		assertEquals("ok", a.check(26368, "sell", 1000, slots()).level);      // part of a part-filled bid
+		assertEquals("warn", a.check(26368, "sell", 2000, slots()).level);
+		// without a list price the old warning stands
+		final Advice b = new Gson().fromJson("{\"schema\":1,\"generatedAt\":5,\"orders\":[{\"itemId\":26368,\"item\":\"Nihil dust\","
+			+ "\"side\":\"buy\",\"price\":2886,\"qty\":1316,\"why\":\"pick\"}]}", Advice.class);
+		assertTrue(String.join("|", b.check(26368, "sell", 1316, slots()).lines).contains("Advice is to buy this item, not sell"));
+	}
+
+	@Test
 	public void offerScreenCatchesAWrongQuantity()
 	{
 		// the slip this was built for: 386 typed where 283 was advised
