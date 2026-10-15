@@ -245,6 +245,21 @@ final class Advice
 			final int in = placedIn(a, now);
 			lines.add(describe(a) + (in >= 0 ? " (already in slot " + in + ")" : ""));
 		}
+		// the units of an advised bid are another advised sale of the item, at the bid's list price (0.6.7)
+		if ("sell".equals(side) && other != null)
+		{
+			for (Order b : orders())
+			{
+				if (b.itemId == itemId && "buy".equals(b.side) && b.listLater != null)
+				{
+					lines.add("or sell " + (b.qty == null ? "" : fmt(b.qty) + " ") + "@ " + fmt(b.listLater) + " (cost " + fmt(b.price) + ")");
+					if (b.qty == null || qty <= b.qty)
+					{
+						qtyOk = true;
+					}
+				}
+			}
+		}
 		boolean warn = false;
 		if (!qtyOk)
 		{
@@ -268,6 +283,10 @@ final class Advice
 	 */
 	String placedMismatch(OfferTracker.Offer o)
 	{
+		if (listsABid(o))
+		{
+			return null;
+		}
 		Order near = null;
 		for (Order a : orders())
 		{
@@ -320,6 +339,28 @@ final class Advice
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * A sell at the list price an advised bid carries (listLater), for no more than the bid's quantity: the advice for the
+	 * units that bid bought, even while another ask of the same item is advised (0.6.7; bagged plant 2026-10-15: the
+	 * sale at the bid's 2,150 was flagged against another slot's 2,182 and re-listed at the buy price).
+	 */
+	boolean listsABid(OfferTracker.Offer o)
+	{
+		if (o == null || o.isEmpty() || !"sell".equals(o.side()))
+		{
+			return false;
+		}
+		for (Order a : orders())
+		{
+			if ("buy".equals(a.side) && a.listLater != null && sameItem(a.itemId, a.item, o) && a.listLater == o.price
+				&& (a.qty == null || o.total <= a.qty))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	static boolean matches(Order a, OfferTracker.Offer o)

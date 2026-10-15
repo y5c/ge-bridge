@@ -120,6 +120,24 @@ public class AdviceTest
 	}
 
 	@Test
+	public void aBidsListPriceIsAdvisedEvenBesideAnotherAsk()
+	{
+		// 2026-10-15: slot 4's 1,084 bagged plants were advised at 2,182 and the new bid's 1,755 carried listLater 2,150;
+		// the sale at 2,150 was flagged as differing and the player re-listed at the buy price
+		final Advice a = new Gson().fromJson("{\"schema\":1,\"generatedAt\":5,\"orders\":["
+			+ "{\"itemId\":8431,\"item\":\"Bagged plant 1\",\"side\":\"sell\",\"price\":2182,\"qty\":1084,\"why\":\"list\",\"slot\":4},"
+			+ "{\"itemId\":8431,\"item\":\"Bagged plant 1\",\"side\":\"buy\",\"price\":2085,\"qty\":1755,\"why\":\"pick\",\"listLater\":2150}]}",
+			Advice.class);
+		assertNull(a.placedMismatch(offer(8431, "Bagged plant 1", "SELLING", 2150, 1755)));
+		assertNull(a.placedMismatch(offer(8431, "Bagged plant 1", "SELLING", 2182, 1084)));
+		assertNotNull(a.placedMismatch(offer(8431, "Bagged plant 1", "SELLING", 2085, 1755)));   // the slip still warns
+		final Advice.Check c = a.check(8431, "sell", 1755, slots());
+		assertEquals("ok", c.level);
+		assertTrue(String.join("|", c.lines).contains("or sell 1,755 @ 2,150 (cost 2,085)"));
+		assertEquals("warn", a.check(8431, "sell", 3000, slots()).level);
+	}
+
+	@Test
 	public void offerScreenCatchesAWrongQuantity()
 	{
 		// the slip this was built for: 386 typed where 283 was advised
