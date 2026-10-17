@@ -1,0 +1,89 @@
+{
+ "advice": {
+  "generatedAt": 1800000000000,
+  "generatedIso": "2027-01-15T08:00:00Z",
+  "orders": [
+   {
+    "cost": 2083.0,
+    "item": "Bagged plant 1",
+    "itemId": 8431,
+    "price": 2182,
+    "qty": 1084,
+    "side": "sell",
+    "slot": 4,
+    "why": "list"
+   },
+   {
+    "item": "Bagged plant 1",
+    "itemId": 8431,
+    "listLater": 2150,
+    "price": 2085,
+    "qty": 1755,
+    "record": "new item, no record",
+    "side": "buy",
+    "slot": null,
+    "why": "pick"
+   }
+  ],
+  "schema": 1,
+  "slots": [
+   {
+    "action": "list",
+    "done": 1084,
+    "item": "Bagged plant 1",
+    "itemId": 8431,
+    "price": 2085,
+    "reason": "list",
+    "side": "sell",
+    "slot": 4,
+    "text": "collect, list at 2,182",
+    "total": 1084
+   }
+  ]
+ },
+ "checks": [
+  {
+   "contains": "or sell 1,755 @ 2,150 (cost 2,085)",
+   "itemId": 8431,
+   "level": "ok",
+   "qty": 1755,
+   "side": "sell",
+   "type": "check"
+  },
+  {
+   "expect": null,
+   "offer": {
+    "item": "Bagged plant 1",
+    "itemId": 8431,
+    "price": 2150,
+    "state": "SELLING",
+    "total": 1755
+   },
+   "type": "mismatch"
+  },
+  {
+   "expect": null,
+   "offer": {
+    "item": "Bagged plant 1",
+    "itemId": 8431,
+    "price": 2182,
+    "state": "SELLING",
+    "total": 1084
+   },
+   "type": "mismatch"
+  },
+  {
+   "expect": "price 2,085",
+   "offer": {
+    "item": "Bagged plant 1",
+    "itemId": 8431,
+    "price": 2085,
+    "state": "SELLING",
+    "total": 1755
+   },
+   "type": "mismatch"
+  }
+ ],
+ "name": "bid_list_price_beside_another_ask",
+ "why": "0.6.7: slot 4's units are advised at 2,182 and a new bid's at 2,150 \u2014 selling the bid's units at 2,150 is advised"
+}

@@ -1,0 +1,58 @@
+{
+ "advice": {
+  "generatedAt": 1800000000000,
+  "generatedIso": "2027-01-15T08:00:00Z",
+  "orders": [
+   {
+    "item": "Divine battlemage potion(4)",
+    "itemId": 24623,
+    "price": 17356,
+    "qty": 201,
+    "side": "sell",
+    "slot": 2,
+    "why": "cross"
+   }
+  ],
+  "schema": 1,
+  "slots": [
+   {
+    "action": "cross",
+    "done": 82,
+    "item": "Divine battlemage potion(4)",
+    "itemId": 24623,
+    "price": 19103,
+    "reason": "cross",
+    "side": "sell",
+    "slot": 2,
+    "text": "sell at 17,356",
+    "total": 283
+   }
+  ]
+ },
+ "checks": [
+  {
+   "expect": [
+    "sell:24623:17356"
+   ],
+   "slots": {},
+   "type": "toPlace"
+  },
+  {
+   "expect": [],
+   "markPlaced": [
+    {
+     "done": 0,
+     "item": "Divine battlemage potion(4)",
+     "itemId": 24623,
+     "price": 17356,
+     "state": "SELLING",
+     "total": 201
+    }
+   ],
+   "slots": {},
+   "type": "toPlace"
+  }
+ ],
+ "name": "instant_fill_leaves_the_list",
+ "why": "0.6.5: a sell to the standing buyers filled and was collected in seconds; once seen placed it stays off the list"
+}

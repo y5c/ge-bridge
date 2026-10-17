@@ -1,0 +1,40 @@
+{
+ "advice": {
+  "generatedAt": 1800000000000,
+  "generatedIso": "2027-01-15T08:00:00Z",
+  "orders": [
+   {
+    "item": "Large mahogany hull parts",
+    "itemId": 32071,
+    "price": 34651,
+    "qty": 100,
+    "record": "new item, no record",
+    "side": "buy",
+    "slot": null,
+    "why": "pick"
+   }
+  ],
+  "schema": 1,
+  "slots": []
+ },
+ "checks": [
+  {
+   "contains": "Advice is to buy this item, not sell",
+   "itemId": 32071,
+   "level": "warn",
+   "qty": 100,
+   "side": "sell",
+   "type": "check"
+  },
+  {
+   "contains": "Quantity 60 is not the advised 100",
+   "itemId": 32071,
+   "level": "warn",
+   "qty": 60,
+   "side": "buy",
+   "type": "check"
+  }
+ ],
+ "name": "wrong_side_and_quantity_warn",
+ "why": "a buy-only pick without a list price: a sale is the wrong side, and a different quantity warns"
+}

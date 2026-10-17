@@ -1,0 +1,64 @@
+{
+ "advice": {
+  "generatedAt": 1800000000000,
+  "generatedIso": "2027-01-15T08:00:00Z",
+  "orders": [
+   {
+    "item": "Nihil dust",
+    "itemId": 26368,
+    "price": 3457,
+    "qty": 274,
+    "side": "sell",
+    "slot": 1,
+    "why": "cancel (bought units)"
+   }
+  ],
+  "schema": 1,
+  "slots": [
+   {
+    "action": "cancel",
+    "done": 274,
+    "item": "Nihil dust",
+    "itemId": 26368,
+    "price": 3133,
+    "reason": "cancel",
+    "side": "buy",
+    "slot": 1,
+    "text": "cancel, list 274 at 3,457",
+    "total": 1139
+   }
+  ]
+ },
+ "checks": [
+  {
+   "expect": [],
+   "slots": {
+    "1": {
+     "done": 274,
+     "item": "Nihil dust",
+     "itemId": 26368,
+     "price": 3133,
+     "state": "BUYING",
+     "total": 1139
+    }
+   },
+   "type": "toPlace"
+  },
+  {
+   "expect": [
+    "sell:26368:3457"
+   ],
+   "slots": {},
+   "type": "toPlace"
+  },
+  {
+   "itemId": 26368,
+   "level": "ok",
+   "qty": 274,
+   "side": "sell",
+   "type": "check"
+  }
+ ],
+ "name": "cancel_lists_the_bought_units",
+ "why": "a part-filled bid is cancelled and its units listed: the sale waits for the slot to change, then is listed"
+}

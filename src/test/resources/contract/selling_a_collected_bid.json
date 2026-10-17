@@ -1,0 +1,47 @@
+{
+ "advice": {
+  "generatedAt": 1800000000000,
+  "generatedIso": "2027-01-15T08:00:00Z",
+  "orders": [
+   {
+    "item": "Nihil dust",
+    "itemId": 26368,
+    "listLater": 3345,
+    "price": 2886,
+    "qty": 1316,
+    "record": "new item, no record",
+    "side": "buy",
+    "slot": null,
+    "why": "pick"
+   }
+  ],
+  "schema": 1,
+  "slots": []
+ },
+ "checks": [
+  {
+   "contains": "sell 1,316 @ 3,345 (cost 2,886)",
+   "itemId": 26368,
+   "level": "ok",
+   "qty": 1316,
+   "side": "sell",
+   "type": "check"
+  },
+  {
+   "itemId": 26368,
+   "level": "warn",
+   "qty": 2000,
+   "side": "sell",
+   "type": "check"
+  },
+  {
+   "itemId": 26368,
+   "level": "ok",
+   "qty": 1316,
+   "side": "buy",
+   "type": "check"
+  }
+ ],
+ "name": "selling_a_collected_bid",
+ "why": "0.6.6: a pick completed and was collected; setting up its sale reads the pick's list price, not 'advice is to buy'"
+}

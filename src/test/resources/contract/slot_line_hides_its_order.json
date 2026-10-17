@@ -1,0 +1,57 @@
+{
+ "advice": {
+  "generatedAt": 1800000000000,
+  "generatedIso": "2027-01-15T08:00:00Z",
+  "orders": [
+   {
+    "item": "Dragon javelin(p++)",
+    "itemId": 19484,
+    "price": 1280,
+    "qty": 1560,
+    "side": "sell",
+    "slot": 0,
+    "why": "trim"
+   }
+  ],
+  "schema": 1,
+  "slots": [
+   {
+    "action": "trim",
+    "done": 0,
+    "item": "Dragon javelin(p++)",
+    "itemId": 19484,
+    "price": 1331,
+    "reason": "trim",
+    "side": "sell",
+    "slot": 0,
+    "text": "trim to 1,280",
+    "total": 1560
+   }
+  ]
+ },
+ "checks": [
+  {
+   "expect": [],
+   "slots": {
+    "0": {
+     "done": 0,
+     "item": "Dragon javelin(p++)",
+     "itemId": 19484,
+     "price": 1331,
+     "state": "SELLING",
+     "total": 1560
+    }
+   },
+   "type": "toPlace"
+  },
+  {
+   "expect": [
+    "sell:19484:1280"
+   ],
+   "slots": {},
+   "type": "toPlace"
+  }
+ ],
+ "name": "slot_line_hides_its_order",
+ "why": "0.6.2: a trim shows on its slot; its order is listed only once the slot has changed"
+}
