@@ -4,11 +4,11 @@
   "generatedIso": "2027-01-15T08:00:00Z",
   "orders": [
    {
-    "item": "Nihil dust",
-    "itemId": 26368,
-    "listLater": 3345,
-    "price": 2886,
-    "qty": 1316,
+    "item": "Gamma seed",
+    "itemId": 9003,
+    "listLater": 3300,
+    "price": 3000,
+    "qty": 1200,
     "record": "new item, no record",
     "side": "buy",
     "slot": null,
@@ -20,24 +20,24 @@
  },
  "checks": [
   {
-   "contains": "sell 1,316 @ 3,345 (cost 2,886)",
-   "itemId": 26368,
+   "contains": "sell 1,200 @ 3,300 (cost 3,000)",
+   "itemId": 9003,
    "level": "ok",
-   "qty": 1316,
+   "qty": 1200,
    "side": "sell",
    "type": "check"
   },
   {
-   "itemId": 26368,
+   "itemId": 9003,
    "level": "warn",
    "qty": 2000,
    "side": "sell",
    "type": "check"
   },
   {
-   "itemId": 26368,
+   "itemId": 9003,
    "level": "ok",
-   "qty": 1316,
+   "qty": 1200,
    "side": "buy",
    "type": "check"
   }

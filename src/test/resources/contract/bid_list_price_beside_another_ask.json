@@ -4,21 +4,21 @@
   "generatedIso": "2027-01-15T08:00:00Z",
   "orders": [
    {
-    "cost": 2083.0,
-    "item": "Bagged plant 1",
-    "itemId": 8431,
-    "price": 2182,
-    "qty": 1084,
+    "cost": 1990.0,
+    "item": "Delta hide",
+    "itemId": 9004,
+    "price": 2100,
+    "qty": 1000,
     "side": "sell",
     "slot": 4,
     "why": "list"
    },
    {
-    "item": "Bagged plant 1",
-    "itemId": 8431,
-    "listLater": 2150,
-    "price": 2085,
-    "qty": 1755,
+    "item": "Delta hide",
+    "itemId": 9004,
+    "listLater": 2060,
+    "price": 2000,
+    "qty": 1500,
     "record": "new item, no record",
     "side": "buy",
     "slot": null,
@@ -29,61 +29,61 @@
   "slots": [
    {
     "action": "list",
-    "done": 1084,
-    "item": "Bagged plant 1",
-    "itemId": 8431,
-    "price": 2085,
+    "done": 1000,
+    "item": "Delta hide",
+    "itemId": 9004,
+    "price": 2000,
     "reason": "list",
     "side": "sell",
     "slot": 4,
-    "text": "collect, list at 2,182",
-    "total": 1084
+    "text": "collect, list at 2,100",
+    "total": 1000
    }
   ]
  },
  "checks": [
   {
-   "contains": "or sell 1,755 @ 2,150 (cost 2,085)",
-   "itemId": 8431,
+   "contains": "or sell 1,500 @ 2,060 (cost 2,000)",
+   "itemId": 9004,
    "level": "ok",
-   "qty": 1755,
+   "qty": 1500,
    "side": "sell",
    "type": "check"
   },
   {
    "expect": null,
    "offer": {
-    "item": "Bagged plant 1",
-    "itemId": 8431,
-    "price": 2150,
+    "item": "Delta hide",
+    "itemId": 9004,
+    "price": 2060,
     "state": "SELLING",
-    "total": 1755
+    "total": 1500
    },
    "type": "mismatch"
   },
   {
    "expect": null,
    "offer": {
-    "item": "Bagged plant 1",
-    "itemId": 8431,
-    "price": 2182,
+    "item": "Delta hide",
+    "itemId": 9004,
+    "price": 2100,
     "state": "SELLING",
-    "total": 1084
+    "total": 1000
    },
    "type": "mismatch"
   },
   {
-   "expect": "price 2,085",
+   "expect": "price 2,000",
    "offer": {
-    "item": "Bagged plant 1",
-    "itemId": 8431,
-    "price": 2085,
+    "item": "Delta hide",
+    "itemId": 9004,
+    "price": 2000,
     "state": "SELLING",
-    "total": 1755
+    "total": 1500
    },
    "type": "mismatch"
   }
  ],
  "name": "bid_list_price_beside_another_ask",
- "why": "0.6.7: slot 4's units are advised at 2,182 and a new bid's at 2,150 \u2014 selling the bid's units at 2,150 is advised"
+ "why": "0.6.7: slot 4's units are advised at 2,100 and a new bid's at 2,060 \u2014 selling the bid's units at 2,060 is advised"
 }

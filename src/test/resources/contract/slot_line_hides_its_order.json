@@ -4,10 +4,10 @@
   "generatedIso": "2027-01-15T08:00:00Z",
   "orders": [
    {
-    "item": "Dragon javelin(p++)",
-    "itemId": 19484,
-    "price": 1280,
-    "qty": 1560,
+    "item": "Alpha rune",
+    "itemId": 9001,
+    "price": 950,
+    "qty": 1000,
     "side": "sell",
     "slot": 0,
     "why": "trim"
@@ -18,14 +18,14 @@
    {
     "action": "trim",
     "done": 0,
-    "item": "Dragon javelin(p++)",
-    "itemId": 19484,
-    "price": 1331,
+    "item": "Alpha rune",
+    "itemId": 9001,
+    "price": 1000,
     "reason": "trim",
     "side": "sell",
     "slot": 0,
-    "text": "trim to 1,280",
-    "total": 1560
+    "text": "trim to 950",
+    "total": 1000
    }
   ]
  },
@@ -35,18 +35,18 @@
    "slots": {
     "0": {
      "done": 0,
-     "item": "Dragon javelin(p++)",
-     "itemId": 19484,
-     "price": 1331,
+     "item": "Alpha rune",
+     "itemId": 9001,
+     "price": 1000,
      "state": "SELLING",
-     "total": 1560
+     "total": 1000
     }
    },
    "type": "toPlace"
   },
   {
    "expect": [
-    "sell:19484:1280"
+    "sell:9001:950"
    ],
    "slots": {},
    "type": "toPlace"

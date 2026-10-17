@@ -4,9 +4,9 @@
   "generatedIso": "2027-01-15T08:00:00Z",
   "orders": [
    {
-    "item": "Large mahogany hull parts",
-    "itemId": 32071,
-    "price": 34651,
+    "item": "Zeta log",
+    "itemId": 9006,
+    "price": 30000,
     "qty": 100,
     "record": "new item, no record",
     "side": "buy",
@@ -20,7 +20,7 @@
  "checks": [
   {
    "contains": "Advice is to buy this item, not sell",
-   "itemId": 32071,
+   "itemId": 9006,
    "level": "warn",
    "qty": 100,
    "side": "sell",
@@ -28,7 +28,7 @@
   },
   {
    "contains": "Quantity 60 is not the advised 100",
-   "itemId": 32071,
+   "itemId": 9006,
    "level": "warn",
    "qty": 60,
    "side": "buy",

@@ -98,16 +98,16 @@ complete, from the game's own completion flags, plus totals. Same field names as
 ## advice.json (optional, written by your tool)
 
 If your own tool writes `advice.json` into the account folder, GE Bridge shows it while the Grand Exchange is open: a
-compact panel listing what to do with each slot ("2 Divine battlemag…(4) — trim 19,092") and which orders to place
-("+ Toktz-ket-xil — 24 @ 297,901"), and an outline on the slots to act on. Long item names are cut to fit one line but
+compact panel listing what to do with each slot ("2 Divine battlemag…(4) — trim 19,000") and which orders to place
+("+ Toktz-ket-xil — 20 @ 300,000"), and an outline on the slots to act on. Long item names are cut to fit one line but
 always keep their last three characters, so doses, charges and tiers stay readable. An order leaves the list once you
 place it, even if it fills and you collect it at once. The plugin never writes this file and never acts on it.
 
 ```json
 {"schema": 1, "generatedAt": 1790000000000,
- "slots":  [{"slot": 0, "itemId": 19484, "item": "Dragon javelin(p++)", "side": "sell", "price": 1331, "total": 1560,
-             "action": "trim", "text": "trim to 1,280"}],
- "orders": [{"itemId": 19484, "item": "Dragon javelin(p++)", "side": "sell", "price": 1280, "qty": 1560, "why": "trim",
+ "slots":  [{"slot": 0, "itemId": 9001, "item": "Alpha rune", "side": "sell", "price": 1000, "total": 1000,
+             "action": "trim", "text": "trim to 950"}],
+ "orders": [{"itemId": 9001, "item": "Alpha rune", "side": "sell", "price": 950, "qty": 1000, "why": "trim",
              "slot": 0}]}
 ```
 
@@ -116,7 +116,7 @@ place it, even if it fills and you collect it at once. The plugin never writes t
   `action: "keep"` entries are counted, not listed.
 - An `orders` entry is listed until a slot holds that order. `qty` may be left out, and then the quantity is not checked.
   `slot` (optional) names the slot whose advice the order carries out (a trim, a listing): the order is then not listed
-  while that slot's line still shows, so a trim appears once, as "trim to 1,280" on its slot.
+  while that slot's line still shows, so a trim appears once, as "trim to 950" on its slot.
 - For a bid, `listAt` (on its `slots` entry) or `listLater` (on its `orders` entry) is the price to list its units at once
   it completes: the panel then reads "collect, list at N" as soon as the buy finishes, and setting up the sale of that
   item later reads "sell N @ P", even after the bought units have been collected.

@@ -4,10 +4,10 @@
   "generatedIso": "2027-01-15T08:00:00Z",
   "orders": [
    {
-    "item": "Nihil dust",
-    "itemId": 26368,
-    "price": 3457,
-    "qty": 274,
+    "item": "Epsilon ore",
+    "itemId": 9005,
+    "price": 3300,
+    "qty": 250,
     "side": "sell",
     "slot": 1,
     "why": "cancel (bought units)"
@@ -17,15 +17,15 @@
   "slots": [
    {
     "action": "cancel",
-    "done": 274,
-    "item": "Nihil dust",
-    "itemId": 26368,
-    "price": 3133,
+    "done": 250,
+    "item": "Epsilon ore",
+    "itemId": 9005,
+    "price": 3000,
     "reason": "cancel",
     "side": "buy",
     "slot": 1,
-    "text": "cancel, list 274 at 3,457",
-    "total": 1139
+    "text": "cancel, list 250 at 3,300",
+    "total": 1000
    }
   ]
  },
@@ -34,27 +34,27 @@
    "expect": [],
    "slots": {
     "1": {
-     "done": 274,
-     "item": "Nihil dust",
-     "itemId": 26368,
-     "price": 3133,
+     "done": 250,
+     "item": "Epsilon ore",
+     "itemId": 9005,
+     "price": 3000,
      "state": "BUYING",
-     "total": 1139
+     "total": 1000
     }
    },
    "type": "toPlace"
   },
   {
    "expect": [
-    "sell:26368:3457"
+    "sell:9005:3300"
    ],
    "slots": {},
    "type": "toPlace"
   },
   {
-   "itemId": 26368,
+   "itemId": 9005,
    "level": "ok",
-   "qty": 274,
+   "qty": 250,
    "side": "sell",
    "type": "check"
   }
