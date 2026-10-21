@@ -37,7 +37,7 @@ public interface GeBridgeConfig extends Config
 	@ConfigItem(
 		keyName = "writeContainers",
 		name = "Write inventory and equipment",
-		description = "Include the inventory and worn equipment in state.json",
+		description = "Include the inventory and worn equipment in state.json, and what the game said at your last Check of an item (charges, contents)",
 		position = 3
 	)
 	default boolean writeContainers()

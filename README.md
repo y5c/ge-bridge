@@ -83,6 +83,7 @@ tools written for it read this file too.
 | `grandExchange.offers."0"…"7"` | each slot: `state`, `itemId`, `itemName`, `listedPrice`, `totalQuantity`, `completedQuantity`, `remainingQuantity`, `spent`, `placedAt`, `placedOffline`, `lastFillAt`, `observedAt` (times in epoch ms), `collectedQuantity`, `collectedCoins`, `personal` |
 | `skills` | per skill: `level`, `boostedLevel`, `xp`; plus `combatLevel`, `totalLevel`, `totalXp` (optional) |
 | `inventory`, `equipment` | `items` by slot: `id`, `name`, `quantity`, `price`, `value` (optional) |
+| `checks` | what the game said in chat the last time you used an item's **Check** option (a charged weapon's charges, darts and scales, a sack's or bag's contents), by item id: `id`, `name`, `lines` (the messages as written, tags removed), `timestamp` — only messages arriving within three ticks of the click; up to 50 items, the oldest dropped first (0.6.8, with the inventory and equipment setting) |
 | `bank`, `bankLastSeenTimestamp`, `bankFromCache` | the bank as of the last time it was opened (optional) |
 | `potionStore`, `potionStoreLastSeenTimestamp` | the bank's potion storage, which is not part of the bank container: per potion `id`, `name`, `doses`, `withdrawDoses`, `pricePerDose`, `value` (with the bank setting) |
 | `runePouch`, `runePouchLastSeenTimestamp` | the rune pouch, read from the game's pouch variables after login and whenever they change (whether or not the pouch is carried): per slot `id`, `name`, `quantity`, `price`, `value` — up to six slots for the divine rune pouch (0.6.4, with the bank setting) |
@@ -136,7 +137,7 @@ from `baseline` lines.
 |---|---|---|
 | Write bank | on | include the bank, its potion storage, the rune pouch and the seed vault in state.json |
 | Write skills | on | include skills and levels |
-| Write inventory and equipment | on | |
+| Write inventory and equipment | on | also what the game said at your last Check of an item |
 | Write quests and diaries | on | account.json |
 | Save interval | 30 s | 10–300 s |
 | Event log size (MB) | 5 | 1–50; the size at which events.jsonl is archived |

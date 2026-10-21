@@ -36,11 +36,13 @@ import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
 import net.runelite.api.Player;
 import net.runelite.api.Skill;
+import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.GrandExchangeOfferChanged;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.MenuOpened;
+import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.InterfaceID;
@@ -62,6 +64,7 @@ import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.Filepath;
+import net.runelite.client.util.Text;
 import net.runelite.client.util.Text;
 
 /**
@@ -91,7 +94,7 @@ import net.runelite.client.util.Text;
 public class GeBridgePlugin extends Plugin
 {
 	static final int SCHEMA = 1;
-	static final String VERSION = "0.6.7";
+	static final String VERSION = "0.6.8";
 	private static final long FLUSH_MIN_MS = 1_000;
 	// slots that got no event at login are read from the client this many ticks after it (RuneLite's own GE
 	// plugin sees the login burst end within 2 ticks; 10 leaves a wide margin before an EMPTY is believed)
@@ -186,6 +189,8 @@ public class GeBridgePlugin extends Plugin
 	private long pouchSeenMs;
 	private JsonElement seedVaultCache;
 	private long seedVaultSeenMs;
+	/** The game's answers to the player's last "Check" on each item (charges, darts and scales, a sack's contents). */
+	private final Checks checks = new Checks();
 
 	private Advice advice;
 	private String adviceText;
@@ -268,6 +273,7 @@ public class GeBridgePlugin extends Plugin
 		pouchStale = false;
 		pouchCache = seedVaultCache = null;
 		pouchSeenMs = seedVaultSeenMs = 0;
+		checks.clear();
 		advice = null;
 		adviceText = null;
 		adviceTick = -1;
@@ -379,6 +385,63 @@ public class GeBridgePlugin extends Plugin
 		else
 		{
 			onCollectionBox(e.getContainerId(), e.getItemContainer());
+		}
+	}
+
+	/**
+	 * The player's own "Check" on an item (charges, a blowpipe's darts and scales, a sack's contents): the game answers
+	 * in chat, so remember which item was asked about. Read-only: the click goes to the game unchanged.
+	 */
+	@Subscribe
+	public void onMenuOptionClicked(MenuOptionClicked e)
+	{
+		if (!config.writeContainers() || !Checks.isCheck(e.getMenuOption()))
+		{
+			return;
+		}
+		int id = e.getItemId();
+		if (id <= 0 && e.getWidget() != null)
+		{
+			id = e.getWidget().getItemId();
+		}
+		if (id <= 0)
+		{
+			id = wornItemNamed(Text.removeTags(e.getMenuTarget()));
+		}
+		if (id > 0)
+		{
+			checks.clicked(id, itemManager.getItemComposition(id).getName(), client.getTickCount());
+		}
+	}
+
+	/** An equipped item's id from its menu target's name, for an equipment-tab Check that carries no item id. */
+	private int wornItemNamed(String name)
+	{
+		final ItemContainer worn = client.getItemContainer(InventoryID.WORN);
+		if (worn == null || name == null)
+		{
+			return -1;
+		}
+		for (Item it : worn.getItems())
+		{
+			if (it.getId() > 0 && name.equalsIgnoreCase(itemManager.getItemComposition(it.getId()).getName()))
+			{
+				return it.getId();
+			}
+		}
+		return -1;
+	}
+
+	@Subscribe
+	public void onChatMessage(ChatMessage e)
+	{
+		if (e.getType() != ChatMessageType.GAMEMESSAGE && e.getType() != ChatMessageType.SPAM)
+		{
+			return;
+		}
+		if (checks.message(Text.removeTags(e.getMessage()), client.getTickCount(), System.currentTimeMillis()))
+		{
+			dirty = true;
 		}
 	}
 
@@ -662,6 +725,7 @@ public class GeBridgePlugin extends Plugin
 		// another account's stores must not be written into this one's state.json if its own has none yet
 		potionCache = pouchCache = seedVaultCache = null;
 		potionSeenMs = pouchSeenMs = seedVaultSeenMs = 0;
+		checks.clear();
 		io.submit(() ->
 		{
 			try
@@ -729,6 +793,7 @@ public class GeBridgePlugin extends Plugin
 					seedVaultCache = prev.get("seedVault");
 					seedVaultSeenMs = longOr(prev, "seedVaultLastSeenTimestamp");
 				}
+				checks.restore(prev.get("checks"));
 				skillsCache = prev.get("skills");
 				inventoryCache = prev.get("inventory");
 				equipmentCache = prev.get("equipment");
@@ -1259,6 +1324,7 @@ public class GeBridgePlugin extends Plugin
 			s.add("inventory", inventoryCache);
 			s.addProperty("equipmentLoaded", equipmentCache != null);
 			s.add("equipment", equipmentCache);
+			s.add("checks", checks.toJson());
 		}
 		if (config.writeBank())
 		{
