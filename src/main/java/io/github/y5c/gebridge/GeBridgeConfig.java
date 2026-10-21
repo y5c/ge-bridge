@@ -12,6 +12,14 @@ public interface GeBridgeConfig extends Config
 {
 	String GROUP = "gebridge";
 
+	/** No settings: its header shows the running version at the top of the panel, to compare with the Hub's. */
+	@ConfigSection(
+		name = "Version " + GeBridgePlugin.VERSION,
+		description = "The GE Bridge version running in this client; state.json and every event carry it too",
+		position = 0
+	)
+	String versionSection = "version";
+
 	@ConfigItem(
 		keyName = "writeBank",
 		name = "Write bank",

@@ -133,6 +133,8 @@ from `baseline` lines.
 
 ## Settings
 
+The panel's first header shows the running version ("Version 0.6.9"), to compare with the Plugin Hub's.
+
 | setting | default | |
 |---|---|---|
 | Write bank | on | include the bank, its potion storage, the rune pouch and the seed vault in state.json |
