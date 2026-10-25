@@ -122,6 +122,27 @@ place it, even if it fills and you collect it at once. The plugin never writes t
   it completes: the panel then reads "collect, list at N" as soon as the buy finishes, and setting up the sale of that
   item later reads "sell N @ P", even after the bought units have been collected.
 
+- `deadlines` (optional) `{"askGraceHours": 5, "bidStallHours": 6, "bidDeadHours": 12}` are your tool's own clocks,
+  used by the reminders. On a `slots` entry, `trimTo` is the trim an ask's grace leads to, and a held price dip carries
+  `holdUntil` (epoch ms) and `holdTrimTo`.
+
+**Reminders (0.7.0).** While you are logged in, GE Bridge checks about once a minute whether one of the advice's own
+deadlines has passed for an order the advice names (never one you marked personal), and says so once per order — a
+RuneLite notification (following your notification settings) and a chat line:
+
+| reminder | when |
+|---|---|
+| ask unsold after its grace | `askGraceHours` after listing, with no sale in the last 2 h: "trim to `trimTo`" when the advice gave one |
+| dip hold over | at `holdUntil`: "trim toward `holdTrimTo`" |
+| bid stalled | `bidStallHours` without a fill |
+| bid dead | `bidDeadHours` without any fill |
+| buy left uncollected | a set time after an advised buy completes: "collect and list at `listAt`" |
+
+Deadlines that passed while you were logged out are reminded at the first check after login, in one notification.
+A price from advice more than 3 hours old carries the advice's age. Without `deadlines` only the uncollected-buy
+reminder runs. Reminders never place, change or cancel anything, and do not repeat RuneLite's own "offer complete"
+notice.
+
 **Checks.** While you set up an offer, the panel compares the item, buy or sell, and the quantity with the advised
 orders, and warns about a wrong quantity, the wrong side, or an order that is already placed. The price you type is
 checked once the order is in its slot (the client keeps it where RuneLite cannot read it by name). A new order that
@@ -133,7 +154,7 @@ from `baseline` lines.
 
 ## Settings
 
-The panel's first header shows the running version ("Version 0.6.9"), to compare with the Plugin Hub's.
+The panel's first header shows the running version ("Version 0.7.0"), to compare with the Plugin Hub's.
 
 | setting | default | |
 |---|---|---|
@@ -147,6 +168,10 @@ The panel's first header shows the running version ("Version 0.6.9"), to compare
 | Highlight slots | on | outline the slots to act on, and slots whose new order differs from the advice |
 | Advice expiry (hours) | 12 | 1–72; older advice is shown as out of date |
 | Personal tag option | on | adds "Mark personal" to a slot's right-click menu (writes a `tag` event; nothing is sent to the game) |
+| Reminders: Notification | on | how reminders notify; follows RuneLite's notification settings |
+| Reminders: one switch per reminder | on | ask unsold after its grace, dip hold over, bid stalled, bid dead, buy left uncollected |
+| Reminders: Uncollected after (minutes) | 10 | 1–120 |
+| Reminders: Chat line | on | also write each reminder in the chat box |
 
 The Grand Exchange slots and the event log are always written; they are what the plugin is for.
 

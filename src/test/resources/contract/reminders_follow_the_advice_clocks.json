@@ -1,0 +1,106 @@
+{
+ "advice": {
+  "deadlines": {
+   "askGraceHours": 5,
+   "bidDeadHours": 12,
+   "bidStallHours": 6
+  },
+  "generatedAt": 1800000000000,
+  "generatedIso": "2027-01-15T08:00:00Z",
+  "orders": [
+   {
+    "item": "Delta hide",
+    "itemId": 9004,
+    "listLater": 760,
+    "price": 700,
+    "qty": 80,
+    "record": "new item, no record",
+    "side": "buy",
+    "slot": null,
+    "why": "pick"
+   }
+  ],
+  "schema": 1,
+  "slots": [
+   {
+    "action": "keep",
+    "done": 0,
+    "item": "Alpha rune",
+    "itemId": 9001,
+    "price": 1000,
+    "reason": "keep \u2014 fresh ask (1 h old) above the level; give it its grace, trim to 950 if still unsold after 5 h",
+    "side": "sell",
+    "slot": 0,
+    "text": "keep",
+    "total": 100,
+    "trimTo": 950
+   },
+   {
+    "action": "keep",
+    "done": 0,
+    "holdTrimTo": 1800,
+    "holdUntil": 1800003600000,
+    "item": "Beta bar",
+    "itemId": 9002,
+    "price": 2000,
+    "reason": "keep \u2014 deep dip \u2026",
+    "side": "sell",
+    "slot": 1,
+    "text": "keep",
+    "total": 50
+   }
+  ]
+ },
+ "checks": [
+  {
+   "expect": [
+    "0 grace trim to 950",
+    "1 dip trim toward 1,800",
+    "3 stall"
+   ],
+   "now": 1800018000000,
+   "slots": {
+    "0": {
+     "done": 0,
+     "item": "Alpha rune",
+     "itemId": 9001,
+     "placedAt": 1799996400000,
+     "price": 1000,
+     "state": "SELLING",
+     "total": 100
+    },
+    "1": {
+     "done": 0,
+     "item": "Beta bar",
+     "itemId": 9002,
+     "placedAt": 1799928000000,
+     "price": 2000,
+     "state": "SELLING",
+     "total": 50
+    },
+    "3": {
+     "done": 0,
+     "item": "Delta hide",
+     "itemId": 9004,
+     "placedAt": 1799992800000,
+     "price": 700,
+     "state": "BUYING",
+     "total": 80
+    },
+    "5": {
+     "done": 0,
+     "item": "Epsilon ore",
+     "itemId": 9005,
+     "personal": true,
+     "placedAt": 1799928000000,
+     "price": 10,
+     "state": "BUYING",
+     "total": 5
+    }
+   },
+   "type": "reminders"
+  }
+ ],
+ "name": "reminders_follow_the_advice_clocks",
+ "why": "0.7.0: an ask past its grace names the advised trim; a dip held 24 h from its start ends with its own trim; a pick placed after the check-in is timed by its own placement; a personal order is never timed"
+}

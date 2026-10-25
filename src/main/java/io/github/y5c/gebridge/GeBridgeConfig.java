@@ -4,6 +4,7 @@ import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
+import net.runelite.client.config.Notification;
 import net.runelite.client.config.Range;
 import net.runelite.client.config.Units;
 
@@ -141,6 +142,110 @@ public interface GeBridgeConfig extends Config
 		section = adviceSection
 	)
 	default boolean personalMenu()
+	{
+		return true;
+	}
+
+	@ConfigSection(
+		name = "Reminders",
+		description = "Reminders when a deadline in your tool's advice passes while you are logged in. Display only: nothing is placed or changed",
+		position = 20
+	)
+	String reminderSection = "reminders";
+
+	@ConfigItem(
+		keyName = "remindNotification",
+		name = "Notification",
+		description = "How reminders notify (desktop notification, flash, sound — follows RuneLite's notification settings)",
+		position = 21,
+		section = reminderSection
+	)
+	default Notification remindNotification()
+	{
+		return Notification.ON;
+	}
+
+	@ConfigItem(
+		keyName = "remindGrace",
+		name = "Ask unsold after its grace",
+		description = "An advised ask still unsold when the advice's grace before a trim runs out",
+		position = 22,
+		section = reminderSection
+	)
+	default boolean remindGrace()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "remindDip",
+		name = "Dip hold over",
+		description = "A held price dip reaches the end of its hold",
+		position = 23,
+		section = reminderSection
+	)
+	default boolean remindDip()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "remindStall",
+		name = "Bid stalled",
+		description = "An advised bid has had no fills for the advice's stall time",
+		position = 24,
+		section = reminderSection
+	)
+	default boolean remindStall()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "remindDead",
+		name = "Bid dead",
+		description = "An advised bid with no fills at all for the advice's dead-bid time",
+		position = 25,
+		section = reminderSection
+	)
+	default boolean remindDead()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "remindCollect",
+		name = "Buy left uncollected",
+		description = "An advised buy completed and is still in its slot",
+		position = 26,
+		section = reminderSection
+	)
+	default boolean remindCollect()
+	{
+		return true;
+	}
+
+	@Range(min = 1, max = 120)
+	@ConfigItem(
+		keyName = "remindCollectMinutes",
+		name = "Uncollected after (minutes)",
+		description = "How long a completed advised buy waits in its slot before the reminder",
+		position = 27,
+		section = reminderSection
+	)
+	default int remindCollectMinutes()
+	{
+		return 10;
+	}
+
+	@ConfigItem(
+		keyName = "remindChat",
+		name = "Chat line",
+		description = "Also write each reminder in the chat box",
+		position = 28,
+		section = reminderSection
+	)
+	default boolean remindChat()
 	{
 		return true;
 	}

@@ -52,6 +52,7 @@ import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.Notifier;
 import net.runelite.client.chat.ChatMessageBuilder;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
@@ -94,7 +95,7 @@ import net.runelite.client.util.Text;
 public class GeBridgePlugin extends Plugin
 {
 	static final int SCHEMA = 1;
-	static final String VERSION = "0.6.9";
+	static final String VERSION = "0.7.0";
 	private static final long FLUSH_MIN_MS = 1_000;
 	// slots that got no event at login are read from the client this many ticks after it (RuneLite's own GE
 	// plugin sees the login burst end within 2 ticks; 10 leaves a wide margin before an EMPTY is believed)
@@ -113,6 +114,8 @@ public class GeBridgePlugin extends Plugin
 	private static final int ACCOUNT_EVERY_TICKS = 1000;
 	// advice.json is re-read this often while the Grand Exchange is open
 	private static final int ADVICE_EVERY_TICKS = 5;
+	/** Reminders are checked about once a minute: their deadlines are hours long. */
+	private static final int REMIND_EVERY_TICKS = 100;
 
 	@Inject
 	private Client client;
@@ -140,6 +143,9 @@ public class GeBridgePlugin extends Plugin
 
 	@Inject
 	private ChatMessageManager chatMessageManager;
+
+	@Inject
+	private Notifier notifier;
 
 	private ExecutorService io;
 
@@ -193,6 +199,8 @@ public class GeBridgePlugin extends Plugin
 	private final Checks checks = new Checks();
 
 	private Advice advice;
+	private final Reminders reminders = new Reminders();
+	private int remindTick = -1;
 	private String adviceText;
 	private int adviceTick = -1;
 	private boolean geOpen;
@@ -274,6 +282,8 @@ public class GeBridgePlugin extends Plugin
 		pouchCache = seedVaultCache = null;
 		pouchSeenMs = seedVaultSeenMs = 0;
 		checks.clear();
+		reminders.clear();
+		remindTick = -1;
 		advice = null;
 		adviceText = null;
 		adviceTick = -1;
@@ -617,6 +627,51 @@ public class GeBridgePlugin extends Plugin
 			view = AdviceView.NONE;
 			log.debug("ge-bridge: advice display failed", ex);
 		}
+		if (loggedIn && reconciled && advice != null && (remindTick < 0 || client.getTickCount() - remindTick >= REMIND_EVERY_TICKS))
+		{
+			remindTick = client.getTickCount();
+			remind(now);
+		}
+	}
+
+	/**
+	 * Reminders whose deadline has passed (0.7.0): one chat line each, and one notification — for a batch (the deadlines
+	 * that passed while logged out, all due at the first check after login) a single notification names the count.
+	 */
+	private void remind(long now)
+	{
+		final Reminders.Settings s = new Reminders.Settings();
+		s.grace = config.remindGrace();
+		s.dip = config.remindDip();
+		s.stall = config.remindStall();
+		s.dead = config.remindDead();
+		s.collect = config.remindCollect();
+		s.collectMinutes = config.remindCollectMinutes();
+		final List<Reminders.Due> due = reminders.due(advice, offersNow(), s, now);
+		if (due.isEmpty())
+		{
+			return;
+		}
+		if (config.remindChat())
+		{
+			for (Reminders.Due d : due)
+			{
+				chatMessageManager.queue(QueuedMessage.builder()
+					.type(ChatMessageType.GAMEMESSAGE)
+					.runeLiteFormattedMessage(reminderLine(d))
+					.build());
+			}
+		}
+		notifier.notify(config.remindNotification(), due.size() == 1
+			? "GE Bridge: " + due.get(0).text
+			: "GE Bridge: " + due.size() + " reminders — " + due.get(0).text + " …");
+	}
+
+	static String reminderLine(Reminders.Due d)
+	{
+		return new ChatMessageBuilder()
+			.append(AdviceView.ACT, Text.escapeJagex("GE Bridge reminder (slot " + d.slot + "): " + d.text))
+			.build();
 	}
 
 	private void observe(int slot, GrandExchangeOffer offer, long now)
@@ -726,6 +781,8 @@ public class GeBridgePlugin extends Plugin
 		potionCache = pouchCache = seedVaultCache = null;
 		potionSeenMs = pouchSeenMs = seedVaultSeenMs = 0;
 		checks.clear();
+		reminders.clear();
+		remindTick = -1;
 		io.submit(() ->
 		{
 			try
