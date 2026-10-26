@@ -86,7 +86,8 @@ public class AdvicePreview
 					throw new IllegalArgumentException(args[a]);
 			}
 		}
-		final AdviceView v = AdviceView.build(advice, offers, mismatches, check, now, 12 * 3_600_000L, true);
+		final AdviceView v = AdviceView.build(advice, offers, mismatches, check, now, 12 * 3_600_000L, true,
+			Reminders.clocks(advice, offers, new Reminders.Settings(), now));
 		if (v.header == null)
 		{
 			System.out.println("nothing to show (no usable advice)");

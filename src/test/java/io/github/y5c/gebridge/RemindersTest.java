@@ -112,4 +112,42 @@ public class RemindersTest
 		o[2] = offer(9003, "Gamma seed", "BOUGHT", 300, 400, 400, 2 * H, 20 * 60_000L);
 		assertEquals(List.of("2 collect: Gamma seed: bought 400 — collect and list at 330"), texts(new Reminders().due(a, o, new Reminders.Settings(), NOW)));
 	}
+
+	@Test
+	public void clocksCountDownThenTurnDue()
+	{
+		final OfferTracker.Offer[] o = new OfferTracker.Offer[8];
+		o[0] = offer(9001, "Alpha rune", "SELLING", 1000, 100, 0, 3 * H, null);         // 2 h of its 5 h grace left
+		o[3] = offer(9004, "Delta hide", "BUYING", 700, 80, 0, 13 * H, null);            // the pick, 13 h without a fill
+		final java.util.Map<Integer, Reminders.Clock> c = Reminders.clocks(advice(NOW - H), o, new Reminders.Settings(), NOW);
+		assertEquals(false, c.get(0).due);
+		assertEquals("trim 950", c.get(0).action);
+		assertEquals("2h0m", Reminders.left(c.get(0).at - NOW));
+		assertEquals("dead", c.get(3).kind);
+		assertEquals(true, c.get(3).due);
+		final Reminders.Settings noDead = new Reminders.Settings();
+		noDead.dead = false;
+		assertEquals("stall", Reminders.clocks(advice(NOW - H), o, noDead, NOW).get(3).kind);
+		assertEquals("<1m", Reminders.left(30_000));
+		assertEquals("45m", Reminders.left(45 * 60_000L));
+	}
+
+	@Test
+	public void thePanelShowsKeptOrdersDeadlines()
+	{
+		final Advice a = advice(NOW - H);
+		a.slots().get(0).action = "keep";
+		final OfferTracker.Offer[] o = new OfferTracker.Offer[8];
+		o[0] = offer(9001, "Alpha rune", "SELLING", 1000, 100, 0, 3 * H, null);
+		o[3] = offer(9004, "Delta hide", "BUYING", 700, 80, 0, 13 * H, null);
+		final AdviceView v = AdviceView.build(a, o, java.util.Collections.emptyMap(), null, NOW, 12 * H, true,
+			Reminders.clocks(a, o, new Reminders.Settings(), NOW));
+		final java.util.List<String> lines = v.lines.stream().map(l -> l.left + " | " + l.right).collect(Collectors.toList());
+		assertTrue(lines.toString(), lines.contains("0 Alpha rune | trim 950 in 2h0m"));
+		assertTrue(lines.toString(), lines.contains("3 Delta hide | now: cancel"));
+		assertEquals(AdviceView.ACT, v.slots.get(3));
+		assertTrue(!v.slots.containsKey(0));                                               // not due yet: no outline
+		final AdviceView without = AdviceView.build(a, o, java.util.Collections.emptyMap(), null, NOW, 12 * H, true);
+		assertTrue(without.lines.stream().noneMatch(l -> l.left.startsWith("0 ")));        // without clocks: counted as kept
+	}
 }

@@ -139,6 +139,10 @@ RuneLite notification (following your notification settings) and a chat line:
 | buy left uncollected | a set time after an advised buy completes: "collect and list at `listAt`" |
 
 Deadlines that passed while you were logged out are reminded at the first check after login, in one notification.
+
+**Deadlines in the panel (0.7.1).** While the Grand Exchange is open, each kept advised order with a deadline gets its own
+line in the panel: the action and the time left ("trim 3,362 in 2h10m", grey), or, once it has passed, "now: trim 3,362"
+in the action colour with the slot outlined. Kept orders without a deadline are still only counted ("2 slots: keep").
 A price from advice more than 3 hours old carries the advice's age. Without `deadlines` only the uncollected-buy
 reminder runs. Reminders never place, change or cancel anything, and do not repeat RuneLite's own "offer complete"
 notice.
@@ -154,7 +158,7 @@ from `baseline` lines.
 
 ## Settings
 
-The panel's first header shows the running version ("Version 0.7.0"), to compare with the Plugin Hub's.
+The panel's first header shows the running version ("Version 0.7.1"), to compare with the Plugin Hub's.
 
 | setting | default | |
 |---|---|---|
@@ -172,6 +176,7 @@ The panel's first header shows the running version ("Version 0.7.0"), to compare
 | Reminders: one switch per reminder | on | ask unsold after its grace, dip hold over, bid stalled, bid dead, buy left uncollected |
 | Reminders: Uncollected after (minutes) | 10 | 1–120 |
 | Reminders: Chat line | on | also write each reminder in the chat box |
+| Reminders: Deadlines in the panel | on | show each kept advised order's next deadline in the panel |
 
 The Grand Exchange slots and the event log are always written; they are what the plugin is for.
 

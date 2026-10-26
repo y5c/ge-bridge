@@ -239,6 +239,18 @@ public interface GeBridgeConfig extends Config
 	}
 
 	@ConfigItem(
+		keyName = "remindPanel",
+		name = "Deadlines in the panel",
+		description = "Show each kept advised order's next deadline in the Grand Exchange panel: the time left, or 'now' once it has passed",
+		position = 29,
+		section = reminderSection
+	)
+	default boolean remindPanel()
+	{
+		return true;
+	}
+
+	@ConfigItem(
 		keyName = "remindChat",
 		name = "Chat line",
 		description = "Also write each reminder in the chat box",

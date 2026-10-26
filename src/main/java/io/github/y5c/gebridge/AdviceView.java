@@ -85,6 +85,17 @@ final class AdviceView
 	static AdviceView build(Advice advice, OfferTracker.Offer[] offers, Map<Integer, String> mismatches, Advice.Check check,
 		long now, long maxAgeMs, boolean highlight)
 	{
+		return build(advice, offers, mismatches, check, now, maxAgeMs, highlight, Collections.emptyMap());
+	}
+
+	/**
+	 * As above, with the reminders' clocks (0.7.1): a kept order with a deadline gets its own line — the action and the time
+	 * left ("trim 3,362 in 2h10m", dim), or, once it has passed, "now: trim 3,362" in the action colour with its slot
+	 * outlined; so does an advised order placed after the check-in. Kept orders without a deadline are still only counted.
+	 */
+	static AdviceView build(Advice advice, OfferTracker.Offer[] offers, Map<Integer, String> mismatches, Advice.Check check,
+		long now, long maxAgeMs, boolean highlight, Map<Integer, Reminders.Clock> clocks)
+	{
 		if (advice == null)
 		{
 			return NONE;
@@ -128,6 +139,17 @@ final class AdviceView
 				}
 			}
 			final Advice.Slot a = advice.forSlot(i, o);
+			final Reminders.Clock c = clocks.get(i);
+			if (c != null && (a == null || "keep".equals(a.action)) && o != null && !o.personal)
+			{
+				lines.add(new Line(i + " " + shorten(o.item, SLOT_NAME), c.due ? "now: " + c.action : c.action + " in " + Reminders.left(c.at - now),
+					c.due ? ACT : DIM));
+				if (c.due)
+				{
+					slots.putIfAbsent(i, ACT);
+				}
+				continue;
+			}
 			if (a == null || o.personal)
 			{
 				continue;

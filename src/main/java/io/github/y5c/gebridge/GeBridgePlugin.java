@@ -95,7 +95,7 @@ import net.runelite.client.util.Text;
 public class GeBridgePlugin extends Plugin
 {
 	static final int SCHEMA = 1;
-	static final String VERSION = "0.7.0";
+	static final String VERSION = "0.7.1";
 	private static final long FLUSH_MIN_MS = 1_000;
 	// slots that got no event at login are read from the client this many ticks after it (RuneLite's own GE
 	// plugin sees the login burst end within 2 ticks; 10 leaves a wide margin before an EMPTY is believed)
@@ -638,7 +638,7 @@ public class GeBridgePlugin extends Plugin
 	 * Reminders whose deadline has passed (0.7.0): one chat line each, and one notification — for a batch (the deadlines
 	 * that passed while logged out, all due at the first check after login) a single notification names the count.
 	 */
-	private void remind(long now)
+	private Reminders.Settings reminderSettings()
 	{
 		final Reminders.Settings s = new Reminders.Settings();
 		s.grace = config.remindGrace();
@@ -647,7 +647,12 @@ public class GeBridgePlugin extends Plugin
 		s.dead = config.remindDead();
 		s.collect = config.remindCollect();
 		s.collectMinutes = config.remindCollectMinutes();
-		final List<Reminders.Due> due = reminders.due(advice, offersNow(), s, now);
+		return s;
+	}
+
+	private void remind(long now)
+	{
+		final List<Reminders.Due> due = reminders.due(advice, offersNow(), reminderSettings(), now);
 		if (due.isEmpty())
 		{
 			return;
@@ -1534,7 +1539,9 @@ public class GeBridgePlugin extends Plugin
 				check = advice.check(itemManager.canonicalize(item), side, client.getVarbitValue(VarbitID.GE_NEWOFFER_QUANTITY), offers);
 			}
 		}
-		return AdviceView.build(advice, offers, mismatches, check, now, config.adviceMaxAgeHours() * 3_600_000L, config.highlightSlots());
+		final Map<Integer, Reminders.Clock> clocks = config.remindPanel() ? Reminders.clocks(advice, offers, reminderSettings(), now)
+			: java.util.Collections.emptyMap();
+		return AdviceView.build(advice, offers, mismatches, check, now, config.adviceMaxAgeHours() * 3_600_000L, config.highlightSlots(), clocks);
 	}
 
 	/** "Mark personal" on a Grand Exchange slot's right-click menu. Client-side only: it writes a tag event. */
