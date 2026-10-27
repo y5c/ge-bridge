@@ -153,12 +153,17 @@ checked once the order is in its slot (the client keeps it where RuneLite cannot
 differs from the advice for its item gets a red outline, a line in the panel and a chat message. Warnings never block
 or change anything: the Confirm button is untouched.
 
+**A cancelled bid's units (0.7.2).** When the advice says to cancel or re-place a part-filled bid and list what it
+bought, the panel counts those units as the slot has them now, not as they were at the check-in — a bid keeps filling
+until it is cancelled. Once you cancel it, the sale to place and the offer screen's quantity check use the count the
+bid really bought.
+
 `state.json` is also the plugin's memory between sessions. If you delete it, the next login starts again
 from `baseline` lines.
 
 ## Settings
 
-The panel's first header shows the running version ("Version 0.7.1"), to compare with the Plugin Hub's.
+The panel's first header shows the running version ("Version 0.7.2"), to compare with the Plugin Hub's.
 
 | setting | default | |
 |---|---|---|

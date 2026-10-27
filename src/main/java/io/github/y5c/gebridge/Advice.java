@@ -66,6 +66,15 @@ final class Advice
 		Integer slot;
 		// a bid: the price to list at once it completes (0.6.3)
 		Long listLater;
+		// the sale of a cancelled bid's units: what the bid had actually bought when it was cancelled (0.7.2). Transient:
+		// seen in the client, not read from the file
+		transient Integer bought;
+
+		/** The quantity to place: the units a cancelled bid really bought, when known, else the advised quantity. */
+		Integer qty()
+		{
+			return bought != null ? bought : qty;
+		}
 	}
 
 	/** What the offer screen shows against the advice: {@code level} is ok, warn or none (no advice for the item). */
@@ -179,6 +188,26 @@ final class Advice
 		return placed != null && placed.contains(a);
 	}
 
+	/**
+	 * An advised bid has just been cancelled with {@code o.done} units bought: the sale of its units takes that count, not
+	 * the check-in's (0.7.2; 2026-10-27: 25 amulets filled between the check-in and the cancel, and the offer screen
+	 * warned that 272 was not the advised 247). The sale is the order that carries out this slot's advice on the other side.
+	 */
+	void boughtOut(int slot, OfferTracker.Offer o)
+	{
+		if (o == null || o.isEmpty() || !"buy".equals(o.side()) || forSlot(slot, o) == null)
+		{
+			return;
+		}
+		for (Order a : orders())
+		{
+			if (a.slot != null && a.slot == slot && "sell".equals(a.side) && sameItem(a.itemId, a.item, o))
+			{
+				a.bought = o.done;
+			}
+		}
+	}
+
 	/** Advised orders no slot holds yet and not seen placed. */
 	List<Order> open(OfferTracker.Offer[] now)
 	{
@@ -205,6 +234,10 @@ final class Advice
 			if (a.slot != null && a.slot >= 0 && a.slot < now.length && forSlot(a.slot, now[a.slot]) != null)
 			{
 				continue;
+			}
+			if (a.qty() != null && a.qty() == 0)
+			{
+				continue;      // a cancelled bid that had bought nothing: nothing to sell
 			}
 			out.add(a);
 		}
@@ -262,7 +295,7 @@ final class Advice
 		boolean qtyOk = false;
 		for (Order a : same)
 		{
-			if (a.qty == null || a.qty == qty)
+			if (a.qty() == null || a.qty() == qty)
 			{
 				qtyOk = true;
 			}
@@ -290,7 +323,7 @@ final class Advice
 		boolean warn = false;
 		if (!qtyOk)
 		{
-			lines.add("Quantity " + fmt(qty) + " is not the advised " + fmt(same.get(0).qty));
+			lines.add("Quantity " + fmt(qty) + " is not the advised " + fmt(same.get(0).qty()));
 			warn = true;
 		}
 		for (Order a : same)
@@ -336,9 +369,9 @@ final class Advice
 		{
 			diff.add("price " + fmt(o.price) + " (advised " + fmt(near.price) + ")");
 		}
-		if (near.qty != null && near.qty != o.total)
+		if (near.qty() != null && near.qty() != o.total)
 		{
-			diff.add("qty " + fmt(o.total) + " (advised " + fmt(near.qty) + ")");
+			diff.add("qty " + fmt(o.total) + " (advised " + fmt(near.qty()) + ")");
 		}
 		return AdviceView.shorten(o.item, AdviceView.SLOT_NAME) + ": " + String.join(", ", diff);
 	}
@@ -392,7 +425,7 @@ final class Advice
 
 	static boolean matches(Order a, OfferTracker.Offer o)
 	{
-		return sameItem(a.itemId, a.item, o) && o.side().equals(a.side) && a.price == o.price && (a.qty == null || a.qty == o.total);
+		return sameItem(a.itemId, a.item, o) && o.side().equals(a.side) && a.price == o.price && (a.qty() == null || a.qty() == o.total);
 	}
 
 	private static boolean sameItem(int itemId, String item, OfferTracker.Offer o)
@@ -406,7 +439,7 @@ final class Advice
 
 	static String describe(Order a)
 	{
-		return a.side + " " + (a.qty == null ? "" : fmt(a.qty) + " ") + a.item + " at " + fmt(a.price);
+		return a.side + " " + (a.qty() == null ? "" : fmt(a.qty()) + " ") + a.item + " at " + fmt(a.price);
 	}
 
 	static String fmt(Number n)

@@ -222,6 +222,34 @@ public class AdviceTest
 	}
 
 	@Test
+	public void aCancelledBidsUnitsAreListedAtTheCountItReallyBought()
+	{
+		// 2026-10-27: advised at 247 bought, 25 more filled before the cancel; the offer screen warned 272 was not 247
+		final Advice a = new Gson().fromJson("{\"schema\":1,\"generatedAt\":1,"
+			+ "\"slots\":[{\"slot\":2,\"itemId\":9005,\"item\":\"Epsilon ore\",\"side\":\"buy\",\"price\":1428,\"total\":5168,"
+			+ "\"action\":\"cancel\",\"text\":\"cancel, list 247 at 1,557\"}],"
+			+ "\"orders\":[{\"itemId\":9005,\"item\":\"Epsilon ore\",\"side\":\"sell\",\"price\":1557,\"qty\":247,\"why\":\"cancel (bought units)\",\"slot\":2}]}",
+			Advice.class);
+		final OfferTracker.Offer buying = new OfferTracker.Offer(9005, "Epsilon ore", "BUYING", 1428, 5168, 272, 0);
+		// before the cancel the slot's line already counts what the bid holds now
+		final AdviceView v = AdviceView.build(a, slots(null, null, buying), new java.util.HashMap<>(), null, 2, 3_600_000L, true);
+		assertEquals("cancel; list 272 @ 1,557", v.lines.get(0).right);
+		assertEquals("warn", a.check(9005, "sell", 272, slots()).level);          // not yet cancelled: the check-in's 247
+		a.boughtOut(3, new OfferTracker.Offer(9005, "Epsilon ore", "CANCELLED_BUY", 1428, 5168, 272, 0));   // another slot
+		assertEquals(Integer.valueOf(247), a.orders().get(0).qty());
+		a.boughtOut(2, new OfferTracker.Offer(9005, "Epsilon ore", "CANCELLED_BUY", 1428, 5168, 272, 0));
+		assertEquals("ok", a.check(9005, "sell", 272, slots()).level);
+		assertEquals("- Epsilon ore", AdviceView.build(a, slots(), new java.util.HashMap<>(), null, 2, 3_600_000L, true).lines.get(0).left);
+		assertEquals("272 @ 1,557", AdviceView.build(a, slots(), new java.util.HashMap<>(), null, 2, 3_600_000L, true).lines.get(0).right);
+		final OfferTracker.Offer listed = new OfferTracker.Offer(9005, "Epsilon ore", "SELLING", 1557, 272, 0, 0);
+		assertNull(a.placedMismatch(listed));                                       // placed as advised: no warning
+		assertTrue(a.toPlace(slots(listed)).isEmpty());
+		// a bid cancelled with nothing bought has nothing to list
+		a.boughtOut(2, new OfferTracker.Offer(9005, "Epsilon ore", "CANCELLED_BUY", 1428, 5168, 0, 0));
+		assertTrue(a.toPlace(slots()).isEmpty());
+	}
+
+	@Test
 	public void compactNamesKeepTheirLastThreeCharacters()
 	{
 		assertEquals("Divine battlemag…(4)", AdviceView.shorten("Divine battlemage potion(4)", AdviceView.SLOT_NAME));

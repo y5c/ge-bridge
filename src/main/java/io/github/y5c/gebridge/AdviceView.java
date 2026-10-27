@@ -74,6 +74,21 @@ final class AdviceView
 			.replace("sell at ", "sell ").replace("cancel, list ", "cancel; list ").replace(" at ", " @ ");
 	}
 
+	private static final java.util.regex.Pattern LIST_UNITS = java.util.regex.Pattern.compile("list [0-9][0-9,]*");
+
+	/**
+	 * A bid advised to be cancelled or re-placed, with the units it has bought listed: the count as the slot has it now,
+	 * not as it was at the check-in — a bid keeps filling until it is cancelled (0.7.2).
+	 */
+	static String liveUnits(Advice.Slot a, OfferTracker.Offer o)
+	{
+		if (a.text == null || o == null || !"buy".equals(o.side()) || o.done <= 0)
+		{
+			return a.text;
+		}
+		return LIST_UNITS.matcher(a.text).replaceFirst("list " + Advice.fmt(o.done));
+	}
+
 	/**
 	 * What to draw. Pure, so the panel can be rendered and checked outside the game.
 	 *
@@ -159,13 +174,13 @@ final class AdviceView
 				keep++;
 				continue;
 			}
-			lines.add(new Line(i + " " + shorten(a.item, SLOT_NAME), compact(a.text), ACT));
+			lines.add(new Line(i + " " + shorten(a.item, SLOT_NAME), compact(liveUnits(a, o)), ACT));
 			slots.putIfAbsent(i, ACT);
 		}
 		for (Advice.Order o : advice.toPlace(offers))
 		{
 			lines.add(new Line(("buy".equals(o.side) ? "+ " : "- ") + shorten(o.item, ORDER_NAME),
-				(o.qty == null ? "" : Advice.fmt(o.qty) + " ") + "@ " + Advice.fmt(o.price), TEXT));
+				(o.qty() == null ? "" : Advice.fmt(o.qty()) + " ") + "@ " + Advice.fmt(o.price), TEXT));
 		}
 		if (keep > 0)
 		{
