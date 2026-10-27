@@ -133,6 +133,28 @@ public class RemindersTest
 	}
 
 	@Test
+	public void aStalledBidNamesWhatTheAdviceSaidItBrings()
+	{
+		// 0.7.3 (expeditious bracelet 2026-10-27): "now: re-place" without a price
+		final OfferTracker.Offer[] o = new OfferTracker.Offer[8];
+		o[2] = offer(9003, "Gamma seed", "BUYING", 300, 400, 0, 7 * H, null);              // 7 h without a fill
+		final Advice a = advice(NOW - H);
+		assertEquals("re-place (check in)", Reminders.clocks(a, o, new Reminders.Settings(), NOW).get(2).action);
+		a.slots().get(2).replaceTo = 310L;
+		assertEquals("re-place 310", Reminders.clocks(a, o, new Reminders.Settings(), NOW).get(2).action);
+		assertEquals(List.of("2 stall: Gamma seed: no fills in 6 h — re-place at 310"),
+			texts(new Reminders().due(a, o, new Reminders.Settings(), NOW)));
+		final Advice old = advice(NOW - 5 * H);
+		old.slots().get(2).replaceTo = 310L;
+		assertEquals(List.of("2 stall: Gamma seed: no fills in 6 h — re-place at 310 (advice 5h old)"),
+			texts(new Reminders().due(old, o, new Reminders.Settings(), NOW)));
+		a.slots().get(2).stallCancel = true;                                                 // a cancel day of the re-place A/B
+		assertEquals("cancel", Reminders.clocks(a, o, new Reminders.Settings(), NOW).get(2).action);
+		assertEquals(List.of("2 stall: Gamma seed: no fills in 6 h — the advice cancels it"),
+			texts(new Reminders().due(a, o, new Reminders.Settings(), NOW)));
+	}
+
+	@Test
 	public void thePanelShowsKeptOrdersDeadlines()
 	{
 		final Advice a = advice(NOW - H);

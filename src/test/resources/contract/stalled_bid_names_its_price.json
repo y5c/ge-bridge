@@ -1,0 +1,73 @@
+{
+ "advice": {
+  "deadlines": {
+   "askGraceHours": 5,
+   "bidDeadHours": 12,
+   "bidStallHours": 6
+  },
+  "generatedAt": 1800000000000,
+  "generatedIso": "2027-01-15T08:00:00Z",
+  "orders": [],
+  "schema": 1,
+  "slots": [
+   {
+    "action": "keep",
+    "done": 0,
+    "item": "Gamma seed",
+    "itemId": 9003,
+    "price": 3000,
+    "reason": "keep",
+    "replaceTo": 3050,
+    "side": "buy",
+    "slot": 2,
+    "text": "keep",
+    "total": 500
+   },
+   {
+    "action": "keep",
+    "done": 0,
+    "item": "Beta bar",
+    "itemId": 9002,
+    "price": 2000,
+    "reason": "keep",
+    "side": "buy",
+    "slot": 4,
+    "stallCancel": true,
+    "text": "keep",
+    "total": 50
+   }
+  ]
+ },
+ "checks": [
+  {
+   "expect": [
+    "2 stall re-place at 3,050",
+    "4 stall the advice cancels it"
+   ],
+   "now": 1800025200000,
+   "slots": {
+    "2": {
+     "done": 0,
+     "item": "Gamma seed",
+     "itemId": 9003,
+     "placedAt": 1800000000000,
+     "price": 3000,
+     "state": "BUYING",
+     "total": 500
+    },
+    "4": {
+     "done": 0,
+     "item": "Beta bar",
+     "itemId": 9002,
+     "placedAt": 1800000000000,
+     "price": 2000,
+     "state": "BUYING",
+     "total": 50
+    }
+   },
+   "type": "reminders"
+  }
+ ],
+ "name": "stalled_bid_names_its_price",
+ "why": "0.7.3 (expeditious bracelet 2026-10-27): a kept bid that stalls names what the advice said a stall brings \u2014 the price to re-place at, or cancel on a cancel day of the re-place A/B"
+}

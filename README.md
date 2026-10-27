@@ -134,7 +134,7 @@ RuneLite notification (following your notification settings) and a chat line:
 |---|---|
 | ask unsold after its grace | `askGraceHours` after listing, with no sale in the last 2 h: "trim to `trimTo`" when the advice gave one |
 | dip hold over | at `holdUntil`: "trim toward `holdTrimTo`" |
-| bid stalled | `bidStallHours` without a fill |
+| bid stalled | `bidStallHours` without a fill: "re-place at `replaceTo`", or "cancel" when the slot has `stallCancel` (0.7.3) |
 | bid dead | `bidDeadHours` without any fill |
 | buy left uncollected | a set time after an advised buy completes: "collect and list at `listAt`" |
 
@@ -163,7 +163,7 @@ from `baseline` lines.
 
 ## Settings
 
-The panel's first header shows the running version ("Version 0.7.2"), to compare with the Plugin Hub's.
+The panel's first header shows the running version ("Version 0.7.3"), to compare with the Plugin Hub's.
 
 | setting | default | |
 |---|---|---|

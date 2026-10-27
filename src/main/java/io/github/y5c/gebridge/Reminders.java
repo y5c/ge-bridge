@@ -131,8 +131,13 @@ final class Reminders
 					}
 					else if (stall != null)
 					{
-						c = new Clock("stall", stall, now, "re-place", o.item + ": no fills in " + trimHours(d.bidStallHours)
-							+ " h — a check-in would re-place or cancel it", id + "stall");
+						// what the advice said a stall brings (0.7.3): cancel, or the price to re-place at
+						final boolean cancel = sl != null && Boolean.TRUE.equals(sl.stallCancel);
+						final String to = !cancel && sl != null && sl.replaceTo != null ? Advice.fmt(sl.replaceTo) : null;
+						c = new Clock("stall", stall, now, cancel ? "cancel" : to != null ? "re-place " + to : "re-place (check in)",
+							o.item + ": no fills in " + trimHours(d.bidStallHours) + " h — "
+								+ (cancel ? "the advice cancels it" : to != null ? "re-place at " + to + stale : "a check-in would re-place or cancel it"),
+							id + "stall");
 					}
 					else if (dead != null)
 					{

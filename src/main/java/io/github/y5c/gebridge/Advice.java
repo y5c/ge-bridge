@@ -14,6 +14,7 @@ import java.util.Set;
  * <pre>
  * {"schema": 1, "generatedAt": epoch ms,
  *  "slots":  [{"slot", "itemId", "item", "side", "price", "total", "action", "text"}],   advice for the order now in a slot
+ *             (optional: listAt, trimTo, holdUntil, holdTrimTo, replaceTo, stallCancel — the reminders' prices)
  *  "orders": [{"itemId", "item", "side", "price", "qty", "why", "slot"}],              orders the player should place
  *  "deadlines": {"askGraceHours", "bidStallHours", "bidDeadHours"}}                    the tool's clocks, for reminders (0.7.0)
  * </pre>
@@ -44,6 +45,9 @@ final class Advice
 		Long trimTo;
 		Long holdUntil;
 		Long holdTrimTo;
+		// a kept bid: what a check-in would do if it stalls — re-place to this price, or cancel (0.7.3)
+		Long replaceTo;
+		Boolean stallCancel;
 	}
 
 	/** The tool's own clocks, in hours, which the reminders run against each order's times (0.7.0). */
