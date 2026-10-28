@@ -98,14 +98,15 @@ public class AdvicePreview
 		Dimension d = null;
 		for (int pass = 0; pass < 2; pass++)
 		{
-			AdviceOverlay.fill(panel, v);
-			d = panel.render(prepare(new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).createGraphics()));
+			final Graphics2D g0 = prepare(new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).createGraphics());
+			AdviceOverlay.fill(panel, v, g0.getFontMetrics());
+			d = panel.render(g0);
 			panel.getChildren().clear();
 		}
-		AdviceOverlay.fill(panel, v);
 		final int pad = 12;
 		final BufferedImage img = new BufferedImage(d.width + 2 * pad, d.height + 2 * pad, BufferedImage.TYPE_INT_ARGB);
 		final Graphics2D g = prepare(img.createGraphics());
+		AdviceOverlay.fill(panel, v, g.getFontMetrics());
 		g.setColor(new Color(0x5a5245));        // roughly the GE window's stone, so the panel's translucency reads true
 		g.fillRect(0, 0, img.getWidth(), img.getHeight());
 		g.translate(pad, pad);

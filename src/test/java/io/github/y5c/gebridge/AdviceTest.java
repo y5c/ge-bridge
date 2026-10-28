@@ -252,12 +252,30 @@ public class AdviceTest
 	@Test
 	public void compactNamesKeepTheirLastThreeCharacters()
 	{
-		assertEquals("Divine battlemag…(4)", AdviceView.shorten("Divine battlemage potion(4)", AdviceView.SLOT_NAME));
-		assertEquals("Divine super s…(4)", AdviceView.shorten("Divine super strength potion(4)", AdviceView.ORDER_NAME));
+		assertEquals("Divine battlemag…(4)", AdviceView.shorten("Divine battlemage potion(4)", 20));
+		assertEquals("Divine super s…(4)", AdviceView.shorten("Divine super strength potion(4)", 18));
+		assertEquals("Divine super strength potion(4)", AdviceView.shorten("Divine super strength potion(4)", AdviceView.ORDER_NAME));
 		assertEquals("Bagged plant 1", AdviceView.shorten("Bagged plant 1", AdviceView.SLOT_NAME));
 		assertEquals(20, AdviceView.shorten("Super combat potion(2) and more", 20).length());
 		assertEquals("trim 950", AdviceView.compact("trim to 950"));
 		assertEquals("cancel; list 10 @ 50,000", AdviceView.compact("cancel, list 10 at 50,000"));
 		assertEquals("bid 6,000", AdviceView.compact("re-place at 6,000"));
+	}
+
+	@Test
+	public void thePanelWidensToItsLongestLineWithinItsCap()
+	{
+		final java.awt.FontMetrics fm = new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+			.createGraphics().getFontMetrics(new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.PLAIN, 12));
+		final java.util.List<AdviceView.Line> lines = new java.util.ArrayList<>();
+		lines.add(new AdviceView.Line("0 Tuna potato", "keep", AdviceView.ACT));
+		final AdviceView shortOnes = new AdviceView("Advice (1m old)", AdviceView.ACT, lines, java.util.Collections.emptyMap());
+		assertEquals(240, AdviceOverlay.width(shortOnes, fm));                             // never narrower than before
+		lines.add(new AdviceView.Line("5 Divine super strength potion(4)", "now: re-place 15,050 (advice 5h old)", AdviceView.ACT));
+		final int w = AdviceOverlay.width(new AdviceView("Advice (1m old)", AdviceView.ACT, lines, java.util.Collections.emptyMap()), fm);
+		assertTrue(w > 240 && w <= AdviceOverlay.MAX_WIDTH);
+		assertTrue(w >= fm.stringWidth("5 Divine super strength potion(4)") + fm.stringWidth("now: re-place 15,050 (advice 5h old)"));
+		lines.add(new AdviceView.Line(new String(new char[200]).replace('\0', 'x'), null, AdviceView.ACT));
+		assertEquals(AdviceOverlay.MAX_WIDTH, AdviceOverlay.width(new AdviceView("Advice", AdviceView.ACT, lines, java.util.Collections.emptyMap()), fm));
 	}
 }

@@ -46,9 +46,10 @@ final class AdviceView
 		this.slots = slots;
 	}
 
-	// the compact layout (user's pick, 2026-10-11): names cut to fit one line, actions in a word or two
-	static final int SLOT_NAME = 20;
-	static final int ORDER_NAME = 18;
+	// the compact layout (user's pick, 2026-10-11): actions in a word or two. Names were cut to 20/18 to fit a fixed
+	// 240 px panel; the panel now widens to its longest line (0.7.4, user 2026-10-28), so only very long names are cut
+	static final int SLOT_NAME = 32;
+	static final int ORDER_NAME = 32;
 
 	/**
 	 * A name cut to at most {@code n} characters, keeping its last three: "Divine battlemag…(4)". The ending is what tells
