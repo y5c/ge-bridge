@@ -95,7 +95,7 @@ import net.runelite.client.util.Text;
 public class GeBridgePlugin extends Plugin
 {
 	static final int SCHEMA = 1;
-	static final String VERSION = "0.7.4";
+	static final String VERSION = "0.7.5";
 	private static final long FLUSH_MIN_MS = 1_000;
 	// slots that got no event at login are read from the client this many ticks after it (RuneLite's own GE
 	// plugin sees the login burst end within 2 ticks; 10 leaves a wide margin before an EMPTY is believed)
@@ -151,6 +151,8 @@ public class GeBridgePlugin extends Plugin
 
 	// client thread only
 	private long accountHash = -1;
+	// state.json is being read for accountHash: a second login event must not start another read
+	private boolean loading;
 	private Filepath accountDir;
 	private OfferTracker tracker;
 	private final List<Runnable> pending = new ArrayList<>();
@@ -259,6 +261,7 @@ public class GeBridgePlugin extends Plugin
 	private void reset()
 	{
 		accountHash = -1;
+		loading = false;
 		accountDir = null;
 		tracker = null;
 		pending.clear();
@@ -344,6 +347,12 @@ public class GeBridgePlugin extends Plugin
 				emit(simple("logout"));
 				writeState(now);
 				tracker.resetSession();
+				// logged out, this client knows nothing newer than the file it just wrote, and another client may log
+				// in and write a newer one (0.7.5: a client left open on the login screen then closed wrote its
+				// 11:29 memory over a later session's, and that session's fills were booked again at the next login).
+				// So the slot memory is dropped here and read back from state.json at the next login
+				tracker = null;
+				accountDir = null;
 			}
 			collectBoxes.clear();
 		}
@@ -784,21 +793,26 @@ public class GeBridgePlugin extends Plugin
 	private void ensureAccount()
 	{
 		final long h = client.getAccountHash();
-		if (h == -1 || h == accountHash)
+		if (h == -1 || h == accountHash && (tracker != null || loading))
 		{
 			return;
 		}
-		// a different account (or the first): drop the old memory and load this one's off the client thread
+		if (h != accountHash)
+		{
+			// a different account (or the first): drop the old account's memory
+			bankCache = null;
+			// another account's stores must not be written into this one's state.json if its own has none yet
+			potionCache = pouchCache = seedVaultCache = null;
+			potionSeenMs = pouchSeenMs = seedVaultSeenMs = 0;
+			checks.clear();
+			reminders.clear();
+			remindTick = -1;
+		}
+		// load the account's state.json off the client thread: at its first login, and again after each logout
 		accountHash = h;
 		tracker = null;
 		accountDir = null;
-		bankCache = null;
-		// another account's stores must not be written into this one's state.json if its own has none yet
-		potionCache = pouchCache = seedVaultCache = null;
-		potionSeenMs = pouchSeenMs = seedVaultSeenMs = 0;
-		checks.clear();
-		reminders.clear();
-		remindTick = -1;
+		loading = true;
 		io.submit(() ->
 		{
 			try
@@ -812,6 +826,7 @@ public class GeBridgePlugin extends Plugin
 			catch (IOException ex)
 			{
 				log.warn("ge-bridge: cannot open the data folder", ex);
+				clientThread.invoke(() -> loading = false);
 			}
 		});
 	}
@@ -830,6 +845,7 @@ public class GeBridgePlugin extends Plugin
 		{
 			return;
 		}
+		loading = false;
 		final OfferTracker t = new OfferTracker();
 		if (text != null)
 		{

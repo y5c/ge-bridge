@@ -164,7 +164,7 @@ from `baseline` lines.
 
 ## Settings
 
-The panel's first header shows the running version ("Version 0.7.4"), to compare with the Plugin Hub's.
+The panel's first header shows the running version ("Version 0.7.5"), to compare with the Plugin Hub's.
 
 | setting | default | |
 |---|---|---|
@@ -194,6 +194,8 @@ The Grand Exchange slots and the event log are always written; they are what the
   client; collecting on mobile is not seen.
 - **Login timing.** Fills made while you were logged out are only known to have happened between
   `since` and the login.
+- **Two clients.** Each client reads `state.json` at login and keeps nothing after logout (0.7.5), so a second
+  client left open on the login screen cannot overwrite a newer session's slot memory when it closes.
 
 ## Building
 
