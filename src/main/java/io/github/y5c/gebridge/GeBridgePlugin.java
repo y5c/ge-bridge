@@ -198,6 +198,8 @@ public class GeBridgePlugin extends Plugin
 	private String adviceText;
 	private int adviceTick = -1;
 	private boolean geOpen;
+	private String selectionText;
+	private long selectionWrittenAt;
 	// slot -> how the order just placed there differs from the advice; cleared when the slot's order changes
 	private final Map<Integer, String> mismatches = new HashMap<>();
 	private volatile AdviceView view = AdviceView.NONE;
@@ -243,6 +245,8 @@ public class GeBridgePlugin extends Plugin
 			if (tracker != null && accountDir != null)
 			{
 				emit(simple("stop"));
+				exiting = true;
+				exportOfferSelection(System.currentTimeMillis(), true);
 				writeState(System.currentTimeMillis());
 			}
 			ex.shutdown();
@@ -252,6 +256,8 @@ public class GeBridgePlugin extends Plugin
 
 	private void reset()
 	{
+		selectionText = null;
+		selectionWrittenAt = 0;
 		accountHash = -1;
 		loading = false;
 		accountDir = null;
@@ -569,6 +575,7 @@ public class GeBridgePlugin extends Plugin
 			ensureAccount();
 			return;
 		}
+		exportOfferSelection(now, false);
 		if (loggedIn && !reconciled && loginTick >= 0 && client.getTickCount() - loginTick >= RECONCILE_AFTER_TICKS)
 		{
 			reconciled = true;
@@ -927,6 +934,7 @@ public class GeBridgePlugin extends Plugin
 
 	private java.util.concurrent.Future<?> writeState(long now)
 	{
+		exportOfferSelection(now, exiting);
 		lastWriteMs = now;
 		dirty = false;
 		final Filepath dir = accountDir;
@@ -1487,6 +1495,62 @@ public class GeBridgePlugin extends Plugin
 		return new ChatMessageBuilder()
 			.append(AdviceView.WARN, Text.escapeJagex("GE Bridge: slot " + slot + " differs from the advice: " + diff))
 			.build();
+	}
+
+	/** Export the draft selection independently of advice being enabled or an offer being placed. */
+	private void exportOfferSelection(long now, boolean closing)
+	{
+		final Filepath dir = accountDir;
+		if (dir == null || tracker == null)
+		{
+			return;
+		}
+		final int slot = client.getVarbitValue(VarbitID.GE_SELECTEDSLOT) - 1;
+		final Widget setup = client.getWidget(InterfaceID.GeOffers.SETUP);
+		final int item = client.getVarpValue(VarPlayerID.TRADINGPOST_SEARCH);
+		final OfferTracker.Offer offer = slot >= 0 && slot < OfferTracker.SLOTS ? tracker.get(slot) : null;
+		final boolean open = !closing && loggedIn && client.getGameState() == GameState.LOGGED_IN && isGeOpen()
+			&& setup != null && !setup.isHidden() && slot >= 0 && slot < OfferTracker.SLOTS
+			&& (offer == null || offer.isEmpty()) && item > 0;
+		final Map<String, Object> selection = selectionPayload(open, open ? itemManager.canonicalize(item) : -1,
+			client.getVarbitValue(VarbitID.GE_NEWOFFER_TYPE) == 1 ? "sell" : "buy", slot);
+		selection.put("accountHash", Long.toString(accountHash));
+		selection.put("rsn", rsn);
+		final String signature = gson.toJson(selection);
+		if (signature.equals(selectionText) && now - selectionWrittenAt < 10_000L)
+		{
+			return;
+		}
+		selectionText = signature;
+		selectionWrittenAt = now;
+		selection.put("timestamp", now);
+		final String text = gson.toJson(selection);
+		io.submit(() ->
+		{
+			try
+			{
+				final Filepath tmp = dir.joinSegment("offer-selection.json.tmp");
+				tmp.write(text);
+				tmp.moveTo(dir.joinSegment("offer-selection.json"), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+			}
+			catch (IOException ex)
+			{
+				writeFailures.incrementAndGet();
+				log.debug("ge-bridge: cannot write offer-selection.json", ex);
+			}
+		});
+	}
+
+	static Map<String, Object> selectionPayload(boolean open, int item, String side, int slot)
+	{
+		final Map<String, Object> selection = new LinkedHashMap<>();
+		final boolean selected = open && item > 0 && slot >= 0 && slot < OfferTracker.SLOTS;
+		selection.put("schema", 1);
+		selection.put("open", selected);
+		selection.put("itemId", selected ? item : null);
+		selection.put("side", selected ? side : null);
+		selection.put("slot", selected ? slot : null);
+		return selection;
 	}
 
 	private AdviceView buildView(long now)
